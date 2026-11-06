@@ -1,63 +1,181 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
+
+import { LibraryShell } from "@/components/LibraryShell";
+
+type Book = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  language: string;
+  publisher: string | null;
+  identifier: string | null;
+  visibility: "public" | "private";
+  authors: string[];
+};
+
+const emptyBook: Omit<Book, "id"> = {
+  title: "",
+  subtitle: null,
+  description: null,
+  language: "en",
+  publisher: null,
+  identifier: null,
+  visibility: "public",
+  authors: [],
+};
 
 export default function AdminPage() {
+  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [books, setBooks] = useState<Book[]>([]);
+  const [editing, setEditing] = useState<Book | null>(null);
   const [message, setMessage] = useState("");
+  const [query, setQuery] = useState("");
+
+  const authHeader = `Basic ${typeof window !== "undefined" ? btoa(`${credentials.username}:${credentials.password}`) : ""}`;
+  const visibleBooks = useMemo(
+    () =>
+      books.filter((book) =>
+        `${book.title} ${book.authors.join(" ")}`.toLowerCase().includes(query.toLowerCase()),
+      ),
+    [books, query],
+  );
+
+  async function loadBooks() {
+    if (!credentials.username || !credentials.password) return;
+    const response = await fetch("/api/admin/books/list", {
+      headers: { Authorization: authHeader },
+    });
+    if (response.ok) setBooks(await response.json());
+    else setMessage("Could not load books. Check your admin credentials.");
+  }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const username = String(data.get("username") ?? "");
-    const password = String(data.get("password") ?? "");
-    data.delete("username");
-    data.delete("password");
-    setMessage("Uploading...");
+    const data = new FormData(event.currentTarget);
+    setMessage("Uploading and extracting metadata...");
     const response = await fetch("/api/admin/books", {
       method: "POST",
       body: data,
-      headers: {
-        Authorization: `Basic ${btoa(`${username}:${password}`)}`,
-      },
+      headers: { Authorization: authHeader },
     });
     const result = await response.json().catch(() => ({}));
-    setMessage(response.ok ? `Uploaded book ${result.id}` : result.error ?? "Upload failed");
+    setMessage(response.ok ? "Book uploaded successfully." : result.error ?? "Upload failed.");
+    if (response.ok) {
+      event.currentTarget.reset();
+      await loadBooks();
+    }
+  }
+
+  async function saveBook(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+    const form = new FormData(event.currentTarget);
+    const response = await fetch(`/api/admin/books/${editing.id}`, {
+      method: "PATCH",
+      headers: { Authorization: authHeader, "content-type": "application/json" },
+      body: JSON.stringify({
+        title: form.get("title"),
+        subtitle: form.get("subtitle") || null,
+        description: form.get("description") || null,
+        language: form.get("language"),
+        publisher: form.get("publisher") || null,
+        identifier: form.get("identifier") || null,
+        author: form.get("author") || null,
+        visibility: form.get("visibility"),
+      }),
+    });
+    setMessage(response.ok ? "Metadata saved." : "Could not save metadata.");
+    if (response.ok) {
+      setEditing(null);
+      await loadBooks();
+    }
+  }
+
+  async function deleteBook(book: Book) {
+    if (!confirm(`Delete “${book.title}” permanently?`)) return;
+    const response = await fetch(`/api/admin/books/${book.id}`, {
+      method: "DELETE",
+      headers: { Authorization: authHeader },
+    });
+    setMessage(response.ok ? "Book deleted." : "Could not delete book.");
+    if (response.ok) await loadBooks();
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: "4rem auto", fontFamily: "sans-serif" }}>
-      <h1>Minerva admin</h1>
-      <p>Upload an EPUB and choose whether it belongs in the public or private feed.</p>
-      <form onSubmit={upload} encType="multipart/form-data">
-        <p>
-          <label>
-            Username <input name="username" type="text" autoComplete="username" required />
-          </label>
-        </p>
-        <p>
-          <label>
-            Password <input name="password" type="password" autoComplete="current-password" required />
-          </label>
-        </p>
-        <p>
-          <label>
-            EPUB file{" "}
-            <input name="file" type="file" accept=".epub,application/epub+zip" required />
-          </label>
-        </p>
-        <p>
-          <label>
-            Visibility{" "}
-            <select name="visibility" defaultValue="public">
-              <option value="public">Public</option>
-              <option value="private">Private</option>
-            </select>
-          </label>
-        </p>
-        <button type="submit">Upload book</button>
-      </form>
-      {message && <p role="status">{message}</p>}
-    </main>
+    <LibraryShell active="admin">
+      <div className="topbar">
+        <div>
+          <div className="eyebrow">Library management</div>
+          <h1>Make your shelf yours.</h1>
+          <div className="muted">Upload, organize, and curate your collection.</div>
+        </div>
+        <Link className="button secondary" href="/">View library</Link>
+      </div>
+
+      <div className="stats">
+        <div className="stat"><div className="muted">Total books</div><strong>{books.length}</strong></div>
+        <div className="stat"><div className="muted">Public</div><strong>{books.filter((book) => book.visibility === "public").length}</strong></div>
+        <div className="stat"><div className="muted">Private</div><strong>{books.filter((book) => book.visibility === "private").length}</strong></div>
+        <div className="stat"><div className="muted">OPDS</div><strong>Ready</strong></div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 28 }}>
+        <h2>Upload a new book</h2>
+        <p className="muted">EPUB metadata is extracted automatically. You can refine it after upload.</p>
+        <form onSubmit={upload} encType="multipart/form-data">
+          <div className="form-grid">
+            <div className="field-wrap full"><label>Admin username</label><input className="field" value={credentials.username} onChange={(event) => setCredentials({ ...credentials, username: event.target.value })} required /></div>
+            <div className="field-wrap full"><label>Admin password</label><input className="field" type="password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} required /></div>
+            <div className="field-wrap"><label>EPUB file</label><input className="field" name="file" type="file" accept=".epub,application/epub+zip" required /></div>
+            <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue="public"><option value="public">Public library</option><option value="private">Private library</option></select></div>
+          </div>
+          <div className="actions"><button className="button secondary" type="button" onClick={() => void loadBooks()}>Load library</button><button className="button" type="submit">Upload EPUB</button></div>
+        </form>
+        {message && <p className="muted" role="status">{message}</p>}
+      </div>
+
+      <div className="toolbar">
+        <h2>Your books</h2>
+        <input className="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter books..." />
+      </div>
+      {visibleBooks.length === 0 ? <div className="empty">No books to show yet.</div> : (
+        <div className="panel table-wrap">
+          <table>
+            <thead><tr><th>Title</th><th>Author</th><th>Visibility</th><th>Actions</th></tr></thead>
+            <tbody>{visibleBooks.map((book) => (
+              <tr key={book.id}>
+                <td><strong>{book.title}</strong><br /><span className="muted">{book.language}</span></td>
+                <td>{book.authors.join(", ") || "Unknown"}</td>
+                <td><span className="badge">{book.visibility}</span></td>
+                <td><div className="row-actions"><button className="button secondary" onClick={() => setEditing(book)}>Edit</button><button className="button danger" onClick={() => void deleteBook(book)}>Delete</button></div></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      {editing && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null); }}>
+        <div className="modal">
+          <div className="topbar"><div><div className="eyebrow">Book editor</div><h2>Edit metadata</h2></div><button className="button secondary" onClick={() => setEditing(null)}>Close</button></div>
+          <form onSubmit={saveBook}>
+            <div className="form-grid">
+              <div className="field-wrap full"><label>Title</label><input className="field" name="title" defaultValue={editing.title} required /></div>
+              <div className="field-wrap"><label>Author</label><input className="field" name="author" defaultValue={editing.authors.join(", ")} /></div>
+              <div className="field-wrap"><label>Language</label><input className="field" name="language" defaultValue={editing.language} required /></div>
+              <div className="field-wrap"><label>Subtitle</label><input className="field" name="subtitle" defaultValue={editing.subtitle ?? ""} /></div>
+              <div className="field-wrap"><label>Publisher</label><input className="field" name="publisher" defaultValue={editing.publisher ?? ""} /></div>
+              <div className="field-wrap"><label>Identifier</label><input className="field" name="identifier" defaultValue={editing.identifier ?? ""} /></div>
+              <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue={editing.visibility}><option value="public">Public</option><option value="private">Private</option></select></div>
+              <div className="field-wrap full"><label>Description</label><textarea className="field" name="description" defaultValue={editing.description ?? ""} /></div>
+            </div>
+            <div className="actions"><button className="button" type="submit">Save changes</button></div>
+          </form>
+        </div>
+      </div>}
+    </LibraryShell>
   );
 }

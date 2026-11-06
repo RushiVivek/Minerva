@@ -17,6 +17,7 @@ and Cloudinary for private EPUB assets.
 - Catalog search by title, description, subtitle, or author
 - Reading progress and bookmark synchronization
 - Vercel-ready deployment configuration
+- Kavita-inspired library browsing and administration UI
 
 ## Architecture
 
@@ -133,6 +134,10 @@ downloads.
 The browser upload page is available at `/admin`. It sends admin Basic Auth
 over HTTPS to the upload endpoint.
 
+The home page (`/`) provides a public library view with search, book cards, and
+download links. The admin page provides upload, metadata editing, visibility
+changes, deletion, and library statistics.
+
 Create a client token with:
 
 ```bash
@@ -209,6 +214,9 @@ src/
 - Cover images are modeled but are not yet extracted from EPUB archives.
 - There is no live PostgreSQL/Cloudinary integration test suite.
 - OPDS interoperability has not yet been tested against every target client.
+- Readest can connect to the public or private OPDS catalog. Readest's own
+  progress, annotation, and book-file sync uses Readest Cloud or its documented
+  integrations; it does not automatically call Minerva's custom progress API.
 - Rate limiting, audit logging, backups, and monitoring still need production hardening.
 - Review dependency updates before production deployment; run `npm audit`.
 

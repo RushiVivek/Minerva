@@ -27,6 +27,13 @@ export async function uploadRawBook(buffer: Buffer, publicId: string) {
   );
 }
 
+export async function deleteRawBook(publicId: string) {
+  return getCloudinary().uploader.destroy(publicId, {
+    resource_type: "raw",
+    type: "private",
+  });
+}
+
 export function rawAssetUrl(publicId: string) {
   return getCloudinary().utils.private_download_url(publicId, "epub", {
     resource_type: "raw",

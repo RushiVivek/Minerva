@@ -11,6 +11,7 @@ export type CatalogBook = {
   language: string;
   publisher: string | null;
   identifier: string | null;
+  visibility: "public" | "private";
   cloudinaryPublicId: string;
   coverCloudinaryPublicId: string | null;
   authors: string[];
@@ -44,6 +45,7 @@ export async function listCatalogBooks(options: {
       language: books.language,
       publisher: books.publisher,
       identifier: books.identifier,
+      visibility: books.visibility,
       cloudinaryPublicId: books.cloudinaryPublicId,
       coverCloudinaryPublicId: books.coverCloudinaryPublicId,
       author: authors.name,
@@ -66,6 +68,7 @@ export async function listCatalogBooks(options: {
       language: row.language,
       publisher: row.publisher,
       identifier: row.identifier,
+      visibility: row.visibility,
       cloudinaryPublicId: row.cloudinaryPublicId,
       coverCloudinaryPublicId: row.coverCloudinaryPublicId,
       authors: [],
