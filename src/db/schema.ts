@@ -94,6 +94,35 @@ export const apiTokens = pgTable("api_tokens", {
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
 });
 
+export const kosyncUsers = pgTable("kosync_users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  username: text("username").notNull().unique(),
+  credentialHash: text("credential_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const kosyncProgress = pgTable(
+  "kosync_progress",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => kosyncUsers.id, { onDelete: "cascade" }),
+    document: text("document").notNull(),
+    progress: text("progress").notNull(),
+    percentage: text("percentage").notNull(),
+    device: text("device").notNull(),
+    deviceId: text("device_id"),
+    timestamp: integer("timestamp").notNull(),
+  },
+  (table) => ({
+    userDocumentIndex: uniqueIndex("kosync_progress_user_document_idx").on(
+      table.userId,
+      table.document,
+    ),
+  }),
+);
+
 export const readingProgress = pgTable(
   "reading_progress",
   {

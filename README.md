@@ -16,6 +16,7 @@ and Cloudinary for private EPUB assets.
 - Admin token creation, listing, and revocation
 - Catalog search by title, description, subtitle, or author
 - Reading progress and bookmark synchronization
+- Readest-compatible KOReader Sync/KOSync progress API
 - Vercel-ready deployment configuration
 - Kavita-inspired library browsing and administration UI
 
@@ -130,6 +131,25 @@ downloads.
 | `GET` | `/api/books/:id/download` | Download a book |
 | `GET` | `/api/progress/:bookId` | Read progress |
 | `PUT` | `/api/progress/:bookId` | Save progress and bookmarks |
+
+### Readest progress sync
+
+Minerva also exposes the KOReader Sync protocol at the application root, which
+allows Readest to sync reading progress without using KOReader as a reader:
+
+```text
+GET  /healthcheck
+POST /users/create
+GET  /users/auth
+PUT  /syncs/progress
+GET  /syncs/progress/:document
+```
+
+In Readest, open **Settings → Integrations → Reading Sync → KOReader**, set the
+server URL to the Minerva deployment URL, and register a KOSync username and
+password. The server stores progress per KOSync account and document hash.
+This protocol syncs reading position only; Readest Cloud is still required for
+Readest-native book, bookmark, highlight, and note synchronization.
 
 The browser upload page is available at `/admin`. It sends admin Basic Auth
 over HTTPS to the upload endpoint.
