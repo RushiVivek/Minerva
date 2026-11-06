@@ -82,7 +82,6 @@ The application is available at [http://localhost:3000](http://localhost:3000).
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret |
-| `NEXT_PUBLIC_APP_URL` | Public HTTPS URL used by clients and deployment |
 
 Never commit `.env.local`, Cloudinary secrets, password hashes, or API tokens.
 
@@ -151,7 +150,7 @@ The token is returned only when it is created. Store it securely.
 2. Create a Cloudinary account and collect its cloud name, API key, and API secret.
 3. Create a Vercel project connected to this repository.
 4. Add all `.env.example` values to the Vercel project environment.
-5. Set `NEXT_PUBLIC_APP_URL` to the final HTTPS custom domain.
+5. Configure the custom domain in Vercel if desired.
 6. Run the migration against the production database:
 
    ```bash
@@ -159,7 +158,9 @@ The token is returned only when it is created. Store it securely.
    ```
 
 7. Deploy to Vercel.
-8. Configure the custom domain in Vercel and use that HTTPS URL in Readest.
+8. Use the appropriate deployment URL in Readest. Multiple production deployments
+   can run independently; each deployment generates catalog links from the request
+   host, so no single global app URL is required.
 
 OPDS clients should use the deployed HTTPS endpoint. Do not expose the admin
 page or private catalog over an unsecured connection.
