@@ -23,7 +23,8 @@ export default function AdminPage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [editing, setEditing] = useState<Book | null>(null);
-  const [message, setMessage] = useState("");
+  const [bookMessage, setBookMessage] = useState("");
+  const [folderMessage, setFolderMessage] = useState("");
   const [query, setQuery] = useState("");
 
   const authHeader = `Basic ${typeof window !== "undefined" ? btoa(`${credentials.username}:${credentials.password}`) : ""}`;
@@ -46,12 +47,12 @@ export default function AdminPage() {
     if (response.ok) {
       setBooks(await response.json());
     } else {
-      setMessage("Could not load books. Check your admin credentials.");
+      setBookMessage("Could not load books. Check your admin credentials.");
     }
     if (collectionResponse.ok) {
       setCollections(await collectionResponse.json());
     } else {
-      setMessage("Could not load folders. Check your admin credentials.");
+      setFolderMessage("Could not load folders. Check your admin credentials.");
     }
   }
 
@@ -68,7 +69,7 @@ export default function AdminPage() {
       }),
     });
     const result = await response.json().catch(() => ({}));
-    setMessage(response.ok ? "Folder created." : result.error ?? "Could not create folder.");
+    setFolderMessage(response.ok ? "Folder created." : result.error ?? "Could not create folder.");
     if (response.ok) {
       event.currentTarget.reset();
       await loadBooks();
@@ -78,14 +79,14 @@ export default function AdminPage() {
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    setMessage("Uploading and extracting metadata...");
+    setBookMessage("Uploading and extracting metadata...");
     const response = await fetch("/api/admin/books", {
       method: "POST",
       body: data,
       headers: { Authorization: authHeader },
     });
     const result = await response.json().catch(() => ({}));
-    setMessage(response.ok ? "Book uploaded successfully." : result.error ?? "Upload failed.");
+    setBookMessage(response.ok ? "Book uploaded successfully." : result.error ?? "Upload failed.");
     if (response.ok) {
       event.currentTarget.reset();
       await loadBooks();
@@ -110,7 +111,7 @@ export default function AdminPage() {
         visibility: form.get("visibility"),
       }),
     });
-    setMessage(response.ok ? "Metadata saved." : "Could not save metadata.");
+    setBookMessage(response.ok ? "Metadata saved." : "Could not save metadata.");
     if (response.ok) {
       setEditing(null);
       await loadBooks();
@@ -123,7 +124,7 @@ export default function AdminPage() {
       method: "DELETE",
       headers: { Authorization: authHeader },
     });
-    setMessage(response.ok ? "Book deleted." : "Could not delete book.");
+    setBookMessage(response.ok ? "Book deleted." : "Could not delete book.");
     if (response.ok) await loadBooks();
   }
 
@@ -145,23 +146,62 @@ export default function AdminPage() {
         <div className="stat"><div className="muted">OPDS</div><strong>Ready</strong></div>
       </div>
 
-      <div className="panel" style={{ marginBottom: 28 }}>
-        <h2>Upload a new book</h2>
-        <p className="muted">EPUB metadata is extracted automatically. You can refine it after upload.</p>
-        <form onSubmit={upload} encType="multipart/form-data">
-          <div className="form-grid">
-            <div className="field-wrap full"><label>Admin username</label><input className="field" value={credentials.username} onChange={(event) => setCredentials({ ...credentials, username: event.target.value })} required /></div>
-            <div className="field-wrap full"><label>Admin password</label><input className="field" type="password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} required /></div>
-            <div className="field-wrap"><label>EPUB file</label><input className="field" name="file" type="file" accept=".epub,application/epub+zip" required /></div>
-            <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue="public"><option value="public">Public library</option><option value="private">Private library</option></select></div>
-            <div className="field-wrap"><label>Folder</label><select className="field" name="collectionId" defaultValue=""><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></div>
+      <section aria-labelledby="book-management">
+        <div className="toolbar">
+          <div>
+            <div className="eyebrow">Manage</div>
+            <h2 id="book-management">Book management</h2>
           </div>
+          <button className="button secondary" type="button" onClick={() => void loadBooks()}>Load library</button>
+        </div>
+        <div className="panel" style={{ marginBottom: 28 }}>
+          <h2>Upload a new book</h2>
+          <p className="muted">EPUB metadata is extracted automatically. You can refine it after upload.</p>
+          <form onSubmit={upload} encType="multipart/form-data">
+            <div className="form-grid">
+              <div className="field-wrap full"><label>Admin username</label><input className="field" value={credentials.username} onChange={(event) => setCredentials({ ...credentials, username: event.target.value })} required /></div>
+              <div className="field-wrap full"><label>Admin password</label><input className="field" type="password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} required /></div>
+              <div className="field-wrap"><label>EPUB file</label><input className="field" name="file" type="file" accept=".epub,application/epub+zip" required /></div>
+              <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue="public"><option value="public">Public library</option><option value="private">Private library</option></select></div>
+              <div className="field-wrap"><label>Folder</label><select className="field" name="collectionId" defaultValue=""><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></div>
+            </div>
+            <div className="actions"><button className="button" type="submit">Upload EPUB</button></div>
+          </form>
+          {bookMessage && <p className="muted" role="status">{bookMessage}</p>}
+        </div>
 
-          <div className="actions"><button className="button secondary" type="button" onClick={() => void loadBooks()}>Load library</button><button className="button" type="submit">Upload EPUB</button></div>
-        </form>
-        <div className="panel" style={{ marginTop: 28 }}>
+        <div className="toolbar">
+          <h2>Your books</h2>
+          <input className="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter books..." />
+        </div>
+        {visibleBooks.length === 0 ? <div className="empty">No books to show yet.</div> : (
+          <div className="panel table-wrap">
+            <table>
+              <thead><tr><th>Title</th><th>Author</th><th>Visibility</th><th>Actions</th></tr></thead>
+              <tbody>{visibleBooks.map((book) => (
+                <tr key={book.id}>
+                  <td><strong>{book.title}</strong><br /><span className="muted">{book.language}</span></td>
+                  <td>{book.authors.join(", ") || "Unknown"}</td>
+                  <td><span className="badge">{book.visibility}</span></td>
+                  <td><div className="row-actions"><button className="button secondary" onClick={() => setEditing(book)}>Edit</button><button className="button danger" onClick={() => void deleteBook(book)}>Delete</button></div></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section aria-labelledby="folder-management" style={{ marginTop: 48 }}>
+        <div className="toolbar">
+          <div>
+            <div className="eyebrow">Manage</div>
+            <h2 id="folder-management">Folder management</h2>
+          </div>
+          <span className="muted">{collections.length} folders</span>
+        </div>
+        <div className="panel">
           <h2>Create a catalogue folder</h2>
-          <p className="muted">Folders can be nested to create sub-folders.</p>
+          <p className="muted">Create top-level folders or nest them under an existing folder.</p>
           <form onSubmit={createCollection}>
             <div className="form-grid">
               <div className="field-wrap"><label>Name</label><input className="field" name="name" placeholder="Science Fiction" required /></div>
@@ -170,29 +210,9 @@ export default function AdminPage() {
             </div>
             <div className="actions"><button className="button secondary" type="submit">Create folder</button></div>
           </form>
+          {folderMessage && <p className="muted" role="status">{folderMessage}</p>}
         </div>
-        {message && <p className="muted" role="status">{message}</p>}
-      </div>
-
-      <div className="toolbar">
-        <h2>Your books</h2>
-        <input className="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter books..." />
-      </div>
-      {visibleBooks.length === 0 ? <div className="empty">No books to show yet.</div> : (
-        <div className="panel table-wrap">
-          <table>
-            <thead><tr><th>Title</th><th>Author</th><th>Visibility</th><th>Actions</th></tr></thead>
-            <tbody>{visibleBooks.map((book) => (
-              <tr key={book.id}>
-                <td><strong>{book.title}</strong><br /><span className="muted">{book.language}</span></td>
-                <td>{book.authors.join(", ") || "Unknown"}</td>
-                <td><span className="badge">{book.visibility}</span></td>
-                <td><div className="row-actions"><button className="button secondary" onClick={() => setEditing(book)}>Edit</button><button className="button danger" onClick={() => void deleteBook(book)}>Delete</button></div></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
+      </section>
 
       {editing && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null); }}>
         <div className="modal">
