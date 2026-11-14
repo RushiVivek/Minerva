@@ -79,5 +79,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .reader-settings label { display: flex; align-items: center; gap: 6px; }
 .reader-settings select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
 .reader-frame { min-height: 0; background: #f7f3e8; border-radius: 12px; overflow: hidden; color: #24211d; }
+.reader-frame.reader-dark { background: #050608; color: #e8e8e8; }
+.reader-frame.reader-bookish { background: #eadcc2; color: #3d3024; }
 @media (max-width: 800px) { .sidebar { width: 72px; padding: 22px 10px; } .brand { margin: 0; justify-content: center; } .brand-name, .nav-label, .nav-link span { display: none; } .nav-link { text-align: center; } .main { padding: 28px 18px; } .stats { grid-template-columns: repeat(2, 1fr); } .form-grid { grid-template-columns: 1fr; } .field-wrap.full { grid-column: auto; } }
 @media (max-width: 700px) { .book-detail { grid-template-columns: 1fr; } .book-detail-cover { max-width: 280px; } .reader-page { padding: 14px; } .reader-header { flex-direction: column; } }

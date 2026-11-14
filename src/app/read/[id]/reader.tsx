@@ -12,6 +12,7 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
   const [theme, setTheme] = useState<"light" | "dark" | "bookish">("light");
   const [font, setFont] = useState<"serif" | "sans" | "mono">("serif");
   const [fontSize, setFontSize] = useState("100%");
+  const [continuous, setContinuous] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -57,6 +58,21 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
     };
   }, [bookId]);
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+      if (event.key === "ArrowLeft" || event.key === "PageUp") {
+        event.preventDefault();
+        void move("prev");
+      } else if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+        event.preventDefault();
+        void move("next");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   function applyReaderSetting(
     nextLayout: "paged" | "scroll",
     nextTheme: "light" | "dark" | "bookish",
@@ -70,7 +86,7 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
     const rendition = renditionRef.current;
     if (!rendition) return;
     const families = { serif: "Georgia, serif", sans: "Arial, sans-serif", mono: "monospace" };
-    rendition.flow(nextLayout === "scroll" ? "scrolled-doc" : "paginated");
+    rendition.flow(nextLayout === "scroll" ? (continuous ? "scrolled-doc" : "scrolled") : "paginated");
     rendition.themes.select(nextTheme);
     rendition.themes.font(families[nextFont]);
     rendition.themes.fontSize(nextFontSize);
@@ -90,11 +106,12 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
       </div>
       <div className="reader-settings">
         <label>Layout <select value={layout} onChange={(event) => applyReaderSetting(event.target.value as "paged" | "scroll", theme, font, fontSize)}><option value="paged">Paged</option><option value="scroll">Scroll</option></select></label>
+        <label><input type="checkbox" checked={continuous} onChange={(event) => { setContinuous(event.target.checked); if (layout === "scroll") renditionRef.current?.flow(event.target.checked ? "scrolled-doc" : "scrolled"); }} /> Continuous chapters</label>
         <label>Theme <select value={theme} onChange={(event) => applyReaderSetting(layout, event.target.value as "light" | "dark" | "bookish", font, fontSize)}><option value="light">Light</option><option value="dark">Dark</option><option value="bookish">Bookish</option></select></label>
         <label>Font <select value={font} onChange={(event) => applyReaderSetting(layout, theme, event.target.value as "serif" | "sans" | "mono", fontSize)}><option value="serif">Serif</option><option value="sans">Sans</option><option value="mono">Monospace</option></select></label>
         <label>Size <select value={fontSize} onChange={(event) => applyReaderSetting(layout, theme, font, event.target.value)}><option value="85%">Small</option><option value="100%">Medium</option><option value="120%">Large</option><option value="140%">Extra large</option></select></label>
       </div>
-      <div className="reader-frame" ref={containerRef} />
+      <div className={`reader-frame reader-${theme}`} ref={containerRef} />
     </section>
   );
 }

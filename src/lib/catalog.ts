@@ -48,7 +48,7 @@ export async function listCatalogBooks(options: {
     ? eq(collections.slug, collectionSlug)
     : undefined;
   const rootFilter = rootOnly
-    ? or(isNull(bookCollections.collectionId), isNull(collections.parentId))
+    ? or(isNull(bookCollections.bookId), isNull(collections.parentId))
     : undefined;
 
   const rows = await getDb()
