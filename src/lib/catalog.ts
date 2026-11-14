@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, isNull, or } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import {
@@ -30,8 +30,9 @@ export async function listCatalogBooks(options: {
   limit?: number;
   offset?: number;
   collectionSlug?: string;
+  rootOnly?: boolean;
 }): Promise<CatalogBook[]> {
-  const { includePrivate, query, limit = 50, offset = 0, collectionSlug } = options;
+  const { includePrivate, query, limit = 50, offset = 0, collectionSlug, rootOnly = false } = options;
   const visibilityFilter = includePrivate
     ? undefined
     : eq(books.visibility, "public");
@@ -45,6 +46,9 @@ export async function listCatalogBooks(options: {
     : undefined;
   const collectionFilter = collectionSlug
     ? eq(collections.slug, collectionSlug)
+    : undefined;
+  const rootFilter = rootOnly
+    ? or(isNull(bookCollections.collectionId), isNull(collections.parentId))
     : undefined;
 
   const rows = await getDb()
@@ -67,7 +71,7 @@ export async function listCatalogBooks(options: {
     .leftJoin(collections, eq(collections.id, bookCollections.collectionId))
     .leftJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
     .leftJoin(authors, eq(authors.id, bookAuthors.authorId))
-    .where(and(visibilityFilter, searchFilter, collectionFilter))
+    .where(and(visibilityFilter, searchFilter, collectionFilter, rootFilter))
     .orderBy(asc(books.title))
     .limit(Math.min(Math.max(limit, 1), 100))
     .offset(Math.max(offset, 0));

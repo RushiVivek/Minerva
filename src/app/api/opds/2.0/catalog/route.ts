@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const offset = Number(url.searchParams.get("offset") ?? 0);
 
   try {
-    const books = await listCatalogBooks({ includePrivate: false, query, offset });
+    const books = await listCatalogBooks({ includePrivate: false, query, offset, rootOnly: true });
   const collections = await listCatalogCollections(false);
     const baseUrl = url.origin;
     return NextResponse.json({
