@@ -19,9 +19,11 @@ type Book = {
 };
 type Collection = { id: string; name: string; slug: string; parentId: string | null };
 type ProtectedAction = (authorization: string) => Promise<void>;
+const SESSION_AUTH_KEY = "minerva.admin.authorization";
 
 export default function AdminPage() {
   const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [authorization, setAuthorization] = useState<string | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [editing, setEditing] = useState<Book | null>(null);
@@ -40,15 +42,28 @@ export default function AdminPage() {
   );
 
   function requestCredentials(label: string, action: ProtectedAction) {
+    if (authorization) {
+      void action(authorization);
+      return;
+    }
     setCredentials({ username: "", password: "" });
     setPendingLabel(label);
     setPendingAction(() => action);
   }
 
   useEffect(() => {
-    const timer = window.setTimeout(() => requestCredentials("load the library", loadBooks), 0);
+    const timer = window.setTimeout(() => {
+      const storedAuthorization = window.sessionStorage.getItem(SESSION_AUTH_KEY);
+      if (storedAuthorization) {
+        setAuthorization(storedAuthorization);
+        void loadBooks(storedAuthorization);
+      } else {
+        requestCredentials("load the library", loadBooks);
+      }
+    }, 0);
     return () => window.clearTimeout(timer);
     // The initial prompt is intentional: existing books are protected by admin auth.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function confirmCredentials(event: FormEvent<HTMLFormElement>) {
@@ -56,6 +71,8 @@ export default function AdminPage() {
     if (!credentials.username || !credentials.password || !pendingAction) return;
     const authorization = `Basic ${btoa(`${credentials.username}:${credentials.password}`)}`;
     const action = pendingAction;
+    window.sessionStorage.setItem(SESSION_AUTH_KEY, authorization);
+    setAuthorization(authorization);
     setPendingAction(null);
     setPendingLabel("");
     setCredentials({ username: "", password: "" });
