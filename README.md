@@ -67,11 +67,11 @@ Generate an admin password hash (Minerva uses `scrypt$...`, not Argon2):
 npm run auth:hash-password -- 'replace-with-a-strong-password'
 ```
 
-Put the complete single-line output in `ADMIN_PASSWORD_HASH`, wrapped in single
-quotes so the `$` characters are preserved by Next.js:
+Put the complete single-line output in `ADMIN_PASSWORD_HASH`, escaping each
+`$` as `\$` because Next.js expands unescaped dollar references:
 
 ```dotenv
-ADMIN_PASSWORD_HASH='scrypt$...$...'
+ADMIN_PASSWORD_HASH=scrypt\$<salt>\$<derived-key>
 ```
 
 Do not copy only the `scrypt$` prefix. The value must include the complete salt
@@ -84,8 +84,8 @@ without printing it:
 node --input-type=module -e "import nextEnv from '@next/env'; const {loadEnvConfig}=nextEnv; loadEnvConfig(process.cwd()); const value=process.env.ADMIN_PASSWORD_HASH || ''; console.log({length:value.length,format:value.startsWith('scrypt$') ? 'scrypt' : 'invalid'});"
 ```
 
-An unquoted hash can be expanded by Next.js into an invalid value. After fixing
-`.env.local`, restart the dev server.
+An unescaped hash can be expanded by Next.js into an invalid value. After
+fixing `.env.local`, restart the dev server.
 
 To diagnose admin login without printing the hash:
 
