@@ -76,6 +76,15 @@ To diagnose admin login without printing the hash:
 npm run auth:check -- 'your-password'
 ```
 
+Verify both external services without creating or changing any data:
+
+```bash
+npm run integration:check
+```
+
+This runs `SELECT 1` against PostgreSQL and Cloudinary's API ping. It loads
+`.env`, then `.env.local` with `.env.local` taking precedence.
+
 After changing `.env.local`, restart `npm run dev` or redeploy Vercel. The
 running server does not reload environment variables for an already-started
 process.

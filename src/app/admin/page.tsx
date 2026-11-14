@@ -43,9 +43,16 @@ export default function AdminPage() {
       }),
       fetch("/api/admin/collections", { headers: { Authorization: authHeader } }),
     ]);
-    if (response.ok) setBooks(await response.json());
-    if (collectionResponse.ok) setCollections(await collectionResponse.json());
-    else setMessage("Could not load books. Check your admin credentials.");
+    if (response.ok) {
+      setBooks(await response.json());
+    } else {
+      setMessage("Could not load books. Check your admin credentials.");
+    }
+    if (collectionResponse.ok) {
+      setCollections(await collectionResponse.json());
+    } else {
+      setMessage("Could not load folders. Check your admin credentials.");
+    }
   }
 
   async function createCollection(event: FormEvent<HTMLFormElement>) {
@@ -60,7 +67,8 @@ export default function AdminPage() {
         parentId: form.get("parentId") || null,
       }),
     });
-    setMessage(response.ok ? "Folder created." : "Could not create folder.");
+    const result = await response.json().catch(() => ({}));
+    setMessage(response.ok ? "Folder created." : result.error ?? "Could not create folder.");
     if (response.ok) {
       event.currentTarget.reset();
       await loadBooks();
@@ -149,20 +157,20 @@ export default function AdminPage() {
             <div className="field-wrap"><label>Folder</label><select className="field" name="collectionId" defaultValue=""><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></div>
           </div>
 
-          <div className="panel" style={{ marginBottom: 28 }}>
-            <h2>Create a catalogue folder</h2>
-            <p className="muted">Folders can be nested to create sub-folders.</p>
-            <form onSubmit={createCollection}>
-              <div className="form-grid">
-                <div className="field-wrap"><label>Name</label><input className="field" name="name" placeholder="Science Fiction" required /></div>
-                <div className="field-wrap"><label>Slug</label><input className="field" name="slug" placeholder="science-fiction" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></div>
-                <div className="field-wrap full"><label>Parent folder</label><select className="field" name="parentId" defaultValue=""><option value="">Top level</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></div>
-              </div>
-              <div className="actions"><button className="button secondary" type="submit">Create folder</button></div>
-            </form>
-          </div>
           <div className="actions"><button className="button secondary" type="button" onClick={() => void loadBooks()}>Load library</button><button className="button" type="submit">Upload EPUB</button></div>
         </form>
+        <div className="panel" style={{ marginTop: 28 }}>
+          <h2>Create a catalogue folder</h2>
+          <p className="muted">Folders can be nested to create sub-folders.</p>
+          <form onSubmit={createCollection}>
+            <div className="form-grid">
+              <div className="field-wrap"><label>Name</label><input className="field" name="name" placeholder="Science Fiction" required /></div>
+              <div className="field-wrap"><label>Slug</label><input className="field" name="slug" placeholder="science-fiction" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></div>
+              <div className="field-wrap full"><label>Parent folder</label><select className="field" name="parentId" defaultValue=""><option value="">Top level</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></div>
+            </div>
+            <div className="actions"><button className="button secondary" type="submit">Create folder</button></div>
+          </form>
+        </div>
         {message && <p className="muted" role="status">{message}</p>}
       </div>
 
