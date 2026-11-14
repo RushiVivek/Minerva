@@ -17,6 +17,7 @@ and Cloudinary for private EPUB assets.
 - Catalog search by title, description, subtitle, or author
 - Reading progress and bookmark synchronization
 - Readest-compatible KOReader Sync/KOSync progress API
+- OPDS collections exposed as navigable sub-catalogues
 - Vercel-ready deployment configuration
 - Kavita-inspired library browsing and administration UI
 
@@ -54,6 +55,11 @@ cd Minerva
 npm install
 cp .env.example .env.local
 ```
+
+Minerva's Next.js app loads `.env.local` automatically. The Drizzle CLI is
+configured separately to load `.env` first and `.env.local` second, with
+`.env.local` taking precedence, so `npm run db:migrate` and
+`npm run db:generate` can use the same local configuration.
 
 Generate an admin password hash:
 
@@ -116,6 +122,33 @@ or:
 ```http
 Authorization: Bearer <api-token>
 ```
+
+For the private catalogue, Basic Auth uses `ADMIN_USERNAME` and the plaintext
+admin password corresponding to `ADMIN_PASSWORD_HASH`. Bearer Auth uses an API
+token created through `/api/admin/tokens`; it is not the admin password.
+
+### Catalogue sub-folders
+
+Collections act as OPDS sub-folders. Create one as an admin:
+
+```bash
+curl -u "$ADMIN_USERNAME:$ADMIN_PASSWORD" \
+  -H 'content-type: application/json' \
+  -d '{"name":"Science Fiction","slug":"science-fiction","description":"Sci-fi books"}' \
+  https://books.example.com/api/admin/collections
+```
+
+Assign a book using the returned collection ID:
+
+```bash
+curl -u "$ADMIN_USERNAME:$ADMIN_PASSWORD" \
+  -H 'content-type: application/json' \
+  -d '{"bookId":"BOOK_UUID"}' \
+  https://books.example.com/api/admin/collections/COLLECTION_UUID/books
+```
+
+The collection then appears as a navigable sub-catalogue in the OPDS 2.0
+public/private feeds. A book can belong to multiple collections.
 
 Private books are excluded from public catalogs and require authentication for
 downloads.

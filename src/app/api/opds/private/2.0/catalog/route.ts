@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { listCatalogBooks } from "@/lib/catalog";
+import { listCatalogBooks, listCatalogCollections } from "@/lib/catalog";
 import { requireAuthentication } from "@/lib/auth";
 import { toOpdsPublication } from "@/lib/opds";
 
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
       includePrivate: true,
       query: url.searchParams.get("q") ?? undefined,
     });
+    const collections = await listCatalogCollections(true);
     return NextResponse.json({
       metadata: { title: "Minerva Private Library", numberOfItems: books.length },
       links: [
@@ -21,7 +22,15 @@ export async function GET(request: Request) {
           type: "application/opds+json",
         },
       ],
-      navigation: [],
+      navigation: collections.map((collection) => ({
+        title: collection.name,
+        subtitle: collection.description ?? undefined,
+        links: [{
+          rel: "subsection",
+          href: `${url.origin}/api/opds/private/2.0/catalog/${encodeURIComponent(collection.slug)}`,
+          type: "application/opds+json",
+        }],
+      })),
       publications: books.map((book) => toOpdsPublication(book, url.origin)),
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { listCatalogBooks } from "@/lib/catalog";
+import { listCatalogBooks, listCatalogCollections } from "@/lib/catalog";
 import { toOpdsPublication } from "@/lib/opds";
 
 export async function GET(request: Request) {
@@ -10,6 +10,7 @@ export async function GET(request: Request) {
 
   try {
     const books = await listCatalogBooks({ includePrivate: false, query, offset });
+  const collections = await listCatalogCollections(false);
     const baseUrl = url.origin;
     return NextResponse.json({
     metadata: {
@@ -30,7 +31,15 @@ export async function GET(request: Request) {
       },
     ],
     publications: books.map((book) => toOpdsPublication(book, baseUrl)),
-    navigation: [],
+    navigation: collections.map((collection) => ({
+      title: collection.name,
+      subtitle: collection.description ?? undefined,
+      links: [{
+        rel: "subsection",
+        href: `${baseUrl}/api/opds/2.0/catalog/${encodeURIComponent(collection.slug)}`,
+        type: "application/opds+json",
+      }],
+    })),
     });
   } catch (error) {
     console.error("Failed to load OPDS catalog", error);

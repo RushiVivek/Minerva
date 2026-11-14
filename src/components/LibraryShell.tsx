@@ -23,12 +23,12 @@ export function LibraryShell({
           <span>⚙</span> <span>Manage</span>
         </Link>
         <div className="nav-label">Connect</div>
-        <a className="nav-link" href="/api/opds/2.0/catalog">
+        <Link className="nav-link" href="/api/opds/2.0/catalog">
           <span>↗</span> <span>Public OPDS</span>
-        </a>
-        <a className="nav-link" href="/api/opds/private/2.0/catalog">
+        </Link>
+        <Link className="nav-link" href="/api/opds/private/2.0/catalog">
           <span>⌁</span> <span>Private OPDS</span>
-        </a>
+        </Link>
       </aside>
       <div className="main">{children}</div>
     </div>

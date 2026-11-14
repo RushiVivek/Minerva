@@ -13,20 +13,21 @@
   "dependencies": {
     "@cloudinary/url-gen": "^1.21.0",
     "cloudinary": "^2.11.0",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.4",
     "fflate": "^0.8.3",
-    "next": "^15.1.0",
+    "next": "^16.4.6",
     "postgres": "^3.4.5",
-    "zod": "^3.24.1"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
-    "drizzle-kit": "^0.30.1",
+    "dotenv": "^18.0.10",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.5",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^5.1.0"
   }
 }
