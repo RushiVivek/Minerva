@@ -1,8 +1,8 @@
-import { config } from "dotenv";
+import nextEnv from "@next/env";
 import { scryptSync, timingSafeEqual } from "node:crypto";
 
-config({ path: ".env" });
-config({ path: ".env.local", override: true });
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(process.cwd());
 
 const password = process.argv[2];
 const encoded = process.env.ADMIN_PASSWORD_HASH?.trim();
