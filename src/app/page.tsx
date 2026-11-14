@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 
 import { LibraryShell } from "@/components/LibraryShell";
 
@@ -12,6 +13,7 @@ type Publication = {
     language?: string[];
     description?: string;
   };
+  images?: { href: string; type?: string }[];
   links?: { rel: string; href: string }[];
 };
 
@@ -66,10 +68,11 @@ export default function HomePage() {
             const author = book.metadata.author?.map((item) => item.name).join(", ");
             const download = book.links?.find((link) => link.rel === "acquisition")?.href;
             const details = book.links?.find((link) => link.rel === "alternate")?.href ?? download;
+            const cover = book.images?.[0]?.href;
             return (
               <article className="book-card" key={book.metadata.identifier}>
                 <a className="cover" href={details} aria-label={`View ${book.metadata.title}`}>
-                  <span>{book.metadata.title}</span>
+                  {cover ? <Image src={cover} alt="" width={400} height={600} unoptimized /> : <span>{book.metadata.title}</span>}
                 </a>
                 <div className="book-title" title={book.metadata.title}>{book.metadata.title}</div>
                 <div className="book-author">{author || "Unknown author"}</div>

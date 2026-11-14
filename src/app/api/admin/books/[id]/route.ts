@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { authors, bookAuthors, books } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
-import { deleteRawBook } from "@/lib/cloudinary";
+import { deleteRawBook, uploadCoverImage } from "@/lib/cloudinary";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(500),
@@ -28,18 +28,50 @@ export async function PATCH(
       return NextResponse.json({ error: "Admin authentication required" }, { status: 403 });
     }
     const { id } = await context.params;
-    const parsed = updateSchema.safeParse(await request.json());
+    const contentType = request.headers.get("content-type") ?? "";
+    let rawData: Record<string, unknown>;
+    let cover: File | null = null;
+    if (contentType.includes("multipart/form-data")) {
+      const form = await request.formData();
+      rawData = Object.fromEntries(
+        [...form.entries()].filter(([key, value]) => key !== "cover" && typeof value === "string"),
+      );
+      const uploadedCover = form.get("cover");
+      cover = uploadedCover instanceof File && uploadedCover.size > 0 ? uploadedCover : null;
+    } else {
+      rawData = await request.json();
+    }
+    const parsed = updateSchema.safeParse({
+      ...rawData,
+      subtitle: rawData.subtitle || null,
+      description: rawData.description || null,
+      publisher: rawData.publisher || null,
+      identifier: rawData.identifier || null,
+      author: rawData.author || null,
+    });
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid book metadata" }, { status: 400 });
     }
     const existing = await getDb().select().from(books).where(eq(books.id, id)).limit(1);
     if (!existing[0]) return NextResponse.json({ error: "Book not found" }, { status: 404 });
 
+    let coverCloudinaryPublicId = existing[0].coverCloudinaryPublicId;
+    if (cover) {
+      if (!cover.type.startsWith("image/") || cover.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "Cover must be an image up to 5 MB" }, { status: 400 });
+      }
+      coverCloudinaryPublicId = `minerva/covers/${id}`;
+      await uploadCoverImage(
+        Buffer.from(await cover.arrayBuffer()),
+        coverCloudinaryPublicId,
+        cover.type,
+      );
+    }
     const { author, ...bookMetadata } = parsed.data;
     await getDb().transaction(async (tx) => {
       await tx
         .update(books)
-        .set({ ...bookMetadata, updatedAt: new Date() })
+        .set({ ...bookMetadata, coverCloudinaryPublicId, updatedAt: new Date() })
         .where(eq(books.id, id));
       await tx.delete(bookAuthors).where(eq(bookAuthors.bookId, id));
       if (author) {

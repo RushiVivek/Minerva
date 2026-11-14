@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 
 import { LibraryShell } from "@/components/LibraryShell";
@@ -14,7 +15,13 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
   return (
     <LibraryShell>
       <div className="book-detail">
-        <div className="book-detail-cover cover"><span>{book.title}</span></div>
+        <div className="book-detail-cover cover">
+          {book.coverCloudinaryPublicId ? (
+            <Image src={`/api/books/${book.id}/cover`} alt="" width={400} height={600} unoptimized />
+          ) : (
+            <span>{book.title}</span>
+          )}
+        </div>
         <div className="book-detail-content">
           <div className="eyebrow">Book details</div>
           <h1>{book.title}</h1>

@@ -34,6 +34,22 @@ export async function deleteRawBook(publicId: string) {
   });
 }
 
+export async function uploadCoverImage(
+  buffer: Buffer,
+  publicId: string,
+  contentType: string,
+) {
+  return getCloudinary().uploader.upload(
+    `data:${contentType};base64,${buffer.toString("base64")}`,
+    {
+      public_id: publicId,
+      resource_type: "image",
+      overwrite: true,
+      type: "upload",
+    },
+  );
+}
+
 export function rawAssetUrl(publicId: string) {
   return getCloudinary().utils.private_download_url(publicId, "epub", {
     resource_type: "raw",

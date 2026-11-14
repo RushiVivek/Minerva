@@ -14,6 +14,7 @@ type Book = {
   publisher: string | null;
   identifier: string | null;
   visibility: "public" | "private";
+  coverCloudinaryPublicId: string | null;
   authors: string[];
 };
 type Collection = { id: string; name: string; slug: string; parentId: string | null };
@@ -131,17 +132,8 @@ export default function AdminPage() {
     requestCredentials("save these book changes", async (authorization) => {
       const response = await fetch(`/api/admin/books/${bookId}`, {
         method: "PATCH",
-        headers: { Authorization: authorization, "content-type": "application/json" },
-        body: JSON.stringify({
-          title: form.get("title"),
-          subtitle: form.get("subtitle") || null,
-          description: form.get("description") || null,
-          language: form.get("language"),
-          publisher: form.get("publisher") || null,
-          identifier: form.get("identifier") || null,
-          author: form.get("author") || null,
-          visibility: form.get("visibility"),
-        }),
+        headers: { Authorization: authorization },
+        body: form,
       });
       setBookMessage(response.ok ? "Metadata saved." : "Could not save metadata.");
       if (response.ok) {
@@ -249,8 +241,8 @@ export default function AdminPage() {
 
       {editing && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null); }}>
         <div className="modal">
-          <div className="topbar"><div><div className="eyebrow">Book editor</div><h2>Edit metadata</h2></div><button className="button secondary" onClick={() => setEditing(null)}>Close</button></div>
-          <form onSubmit={saveBook}>
+          <div className="topbar"><div><div className="eyebrow">Book editor</div><h2>Edit metadata</h2></div><button className="button secondary" type="button" onClick={(event) => { event.stopPropagation(); setEditing(null); }}>Close</button></div>
+          <form onSubmit={saveBook} encType="multipart/form-data">
             <div className="form-grid">
               <div className="field-wrap full"><label>Title</label><input className="field" name="title" defaultValue={editing.title} required /></div>
               <div className="field-wrap"><label>Author</label><input className="field" name="author" defaultValue={editing.authors.join(", ")} /></div>
@@ -259,6 +251,7 @@ export default function AdminPage() {
               <div className="field-wrap"><label>Publisher</label><input className="field" name="publisher" defaultValue={editing.publisher ?? ""} /></div>
               <div className="field-wrap"><label>Identifier</label><input className="field" name="identifier" defaultValue={editing.identifier ?? ""} /></div>
               <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue={editing.visibility}><option value="public">Public</option><option value="private">Private</option></select></div>
+              <div className="field-wrap"><label>Cover image</label><input className="field" name="cover" type="file" accept="image/jpeg,image/png,image/webp" /></div>
               <div className="field-wrap full"><label>Description</label><textarea className="field" name="description" defaultValue={editing.description ?? ""} /></div>
             </div>
             <div className="actions"><button className="button" type="submit">Save changes</button></div>

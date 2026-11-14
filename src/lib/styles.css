@@ -42,6 +42,7 @@ h2 { margin: 0; font-size: 22px; }
 .book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 22px; }
 .book-card { min-width: 0; }
 .cover { aspect-ratio: 2 / 3; border-radius: 11px; border: 1px solid var(--line); background: linear-gradient(145deg, #252744, #4a3e86); display: flex; align-items: flex-end; padding: 16px; overflow: hidden; box-shadow: 0 12px 25px #0003; }
+.cover img { width: calc(100% + 32px); height: calc(100% + 32px); margin: -16px; object-fit: cover; }
 .cover span { font-size: 20px; font-weight: 800; line-height: 1.05; }
 .book-title { font-weight: 700; margin-top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .book-author { color: var(--muted); font-size: 13px; margin-top: 5px; }
