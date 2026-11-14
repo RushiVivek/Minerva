@@ -20,6 +20,11 @@ export function toOpdsPublication(book: CatalogBook, baseUrl: string) {
         href: `${baseUrl}/api/books/${book.id}/download`,
         type: "application/epub+zip",
       },
+      {
+        rel: "alternate",
+        href: `${baseUrl}/books/${book.id}`,
+        type: "text/html",
+      },
     ],
   };
 }

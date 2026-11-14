@@ -65,14 +65,15 @@ export default function HomePage() {
           {books.map((book) => {
             const author = book.metadata.author?.map((item) => item.name).join(", ");
             const download = book.links?.find((link) => link.rel === "acquisition")?.href;
+            const details = book.links?.find((link) => link.rel === "alternate")?.href ?? download;
             return (
               <article className="book-card" key={book.metadata.identifier}>
-                <a className="cover" href={download} aria-label={`Download ${book.metadata.title}`}>
+                <a className="cover" href={details} aria-label={`View ${book.metadata.title}`}>
                   <span>{book.metadata.title}</span>
                 </a>
                 <div className="book-title" title={book.metadata.title}>{book.metadata.title}</div>
                 <div className="book-author">{author || "Unknown author"}</div>
-                <span className="badge">EPUB</span>
+                <a className="badge" href={details}>Open book</a>
               </article>
             );
           })}

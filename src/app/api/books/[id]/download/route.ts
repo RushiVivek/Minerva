@@ -6,6 +6,16 @@ import { books } from "@/db/schema";
 import { authenticateRequest } from "@/lib/auth";
 import { rawAssetUrl } from "@/lib/cloudinary";
 
+function downloadName(title: string) {
+  const safeTitle = title
+    .normalize("NFKD")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 120);
+  return `${safeTitle || "book"}.epub`;
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -30,5 +40,16 @@ export async function GET(
     }
   }
 
-  return NextResponse.redirect(rawAssetUrl(book.cloudinaryPublicId));
+  const asset = await fetch(rawAssetUrl(book.cloudinaryPublicId));
+  if (!asset.ok || !asset.body) {
+    return NextResponse.json({ error: "Book asset unavailable" }, { status: 502 });
+  }
+
+  return new Response(asset.body, {
+    headers: {
+      "content-type": "application/epub+zip",
+      "content-disposition": `attachment; filename="${downloadName(book.title)}"; filename*=UTF-8''${encodeURIComponent(downloadName(book.title))}`,
+      "cache-control": "private, max-age=60",
+    },
+  });
 }
