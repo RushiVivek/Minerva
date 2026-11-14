@@ -20,6 +20,7 @@ export type CatalogBook = {
   visibility: "public" | "private";
   cloudinaryPublicId: string;
   coverCloudinaryPublicId: string | null;
+  collectionId: string | null;
   authors: string[];
 };
 
@@ -58,6 +59,7 @@ export async function listCatalogBooks(options: {
       visibility: books.visibility,
       cloudinaryPublicId: books.cloudinaryPublicId,
       coverCloudinaryPublicId: books.coverCloudinaryPublicId,
+      collectionId: collections.id,
       author: authors.name,
     })
     .from(books)
@@ -83,6 +85,7 @@ export async function listCatalogBooks(options: {
       visibility: row.visibility,
       cloudinaryPublicId: row.cloudinaryPublicId,
       coverCloudinaryPublicId: row.coverCloudinaryPublicId,
+      collectionId: row.collectionId,
       authors: [],
     };
     if (row.author) book.authors.push(row.author);

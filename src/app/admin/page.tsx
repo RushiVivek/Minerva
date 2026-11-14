@@ -15,6 +15,7 @@ type Book = {
   identifier: string | null;
   visibility: "public" | "private";
   coverCloudinaryPublicId: string | null;
+  collectionId: string | null;
   authors: string[];
 };
 type Collection = { id: string; name: string; slug: string; parentId: string | null };
@@ -268,6 +269,7 @@ export default function AdminPage() {
               <div className="field-wrap"><label>Publisher</label><input className="field" name="publisher" defaultValue={editing.publisher ?? ""} /></div>
               <div className="field-wrap"><label>Identifier</label><input className="field" name="identifier" defaultValue={editing.identifier ?? ""} /></div>
               <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue={editing.visibility}><option value="public">Public</option><option value="private">Private</option></select></div>
+              <div className="field-wrap"><label>Folder</label><select className="field" name="collectionId" defaultValue={editing.collectionId ?? ""}><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></div>
               <div className="field-wrap"><label>Cover image</label><input className="field" name="cover" type="file" accept="image/jpeg,image/png,image/webp" /></div>
               <div className="field-wrap full"><label>Description</label><textarea className="field" name="description" defaultValue={editing.description ?? ""} /></div>
             </div>

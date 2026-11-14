@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getDb } from "@/db/client";
-import { authors, bookAuthors, books } from "@/db/schema";
+import { authors, bookAuthors, bookCollections, books } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
 import { deleteRawBook, uploadCoverImage } from "@/lib/cloudinary";
 
@@ -16,6 +16,7 @@ const updateSchema = z.object({
   identifier: z.string().trim().max(500).nullable(),
   author: z.string().trim().max(500).nullable(),
   visibility: z.enum(["public", "private"]),
+  collectionId: z.string().uuid().nullable().optional(),
 });
 
 export async function PATCH(
@@ -48,6 +49,9 @@ export async function PATCH(
       publisher: rawData.publisher || null,
       identifier: rawData.identifier || null,
       author: rawData.author || null,
+      ...(rawData.collectionId !== undefined
+        ? { collectionId: rawData.collectionId || null }
+        : {}),
     });
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid book metadata" }, { status: 400 });
@@ -67,7 +71,7 @@ export async function PATCH(
         cover.type,
       );
     }
-    const { author, ...bookMetadata } = parsed.data;
+    const { author, collectionId, ...bookMetadata } = parsed.data;
     await getDb().transaction(async (tx) => {
       await tx
         .update(books)
@@ -77,6 +81,12 @@ export async function PATCH(
       if (author) {
         const [createdAuthor] = await tx.insert(authors).values({ name: author }).returning();
         await tx.insert(bookAuthors).values({ bookId: id, authorId: createdAuthor.id });
+      }
+      if (collectionId !== undefined) {
+        await tx.delete(bookCollections).where(eq(bookCollections.bookId, id));
+        if (collectionId) {
+          await tx.insert(bookCollections).values({ bookId: id, collectionId });
+        }
       }
     });
     return NextResponse.json({ ok: true });
