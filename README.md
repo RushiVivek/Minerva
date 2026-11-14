@@ -67,8 +67,25 @@ Generate an admin password hash (Minerva uses `scrypt$...`, not Argon2):
 npm run auth:hash-password -- 'replace-with-a-strong-password'
 ```
 
-Put the complete single-line output in `ADMIN_PASSWORD_HASH`, then fill in the remaining values in
-`.env.local`.
+Put the complete single-line output in `ADMIN_PASSWORD_HASH`, wrapped in single
+quotes so the `$` characters are preserved by Next.js:
+
+```dotenv
+ADMIN_PASSWORD_HASH='scrypt$...$...'
+```
+
+Do not copy only the `scrypt$` prefix. The value must include the complete salt
+and derived key from the command output.
+
+If admin operations return `Authentication required`, inspect the loaded value
+without printing it:
+
+```bash
+node --input-type=module -e "import nextEnv from '@next/env'; const {loadEnvConfig}=nextEnv; loadEnvConfig(process.cwd()); const value=process.env.ADMIN_PASSWORD_HASH || ''; console.log({length:value.length,format:value.startsWith('scrypt$') ? 'scrypt' : 'invalid'});"
+```
+
+An unquoted hash can be expanded by Next.js into an invalid value. After fixing
+`.env.local`, restart the dev server.
 
 To diagnose admin login without printing the hash:
 
