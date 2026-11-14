@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { LibraryShell } from "@/components/LibraryShell";
@@ -43,6 +43,12 @@ export default function AdminPage() {
     setPendingLabel(label);
     setPendingAction(() => action);
   }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => requestCredentials("load the library", loadBooks), 0);
+    return () => window.clearTimeout(timer);
+    // The initial prompt is intentional: existing books are protected by admin auth.
+  }, []);
 
   async function confirmCredentials(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

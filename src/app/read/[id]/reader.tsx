@@ -11,18 +11,36 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const book = ePub(`/api/books/${bookId}/download`);
-    const rendition = book.renderTo(containerRef.current, {
-      width: "100%",
-      height: "100%",
-      spread: "none",
-    });
-    bookRef.current = book;
-    renditionRef.current = rendition;
-    rendition.display().then(() => setMessage("")).catch(() => setMessage("Could not open this EPUB."));
+    let cancelled = false;
+    let rendition: Rendition | undefined;
+    let book: Book | undefined;
+
+    async function openBook() {
+      try {
+        const response = await fetch(`/api/books/${bookId}/download`);
+        if (!response.ok) throw new Error("EPUB download failed");
+        const archive = await response.arrayBuffer();
+        if (cancelled || !containerRef.current) return;
+        book = ePub(archive);
+        rendition = book.renderTo(containerRef.current, {
+          width: "100%",
+          height: "100%",
+          spread: "none",
+        });
+        bookRef.current = book;
+        renditionRef.current = rendition;
+        await rendition.display();
+        if (!cancelled) setMessage("");
+      } catch {
+        if (!cancelled) setMessage("Could not open this EPUB. Check the download endpoint and book file.");
+      }
+    }
+
+    void openBook();
     return () => {
-      rendition.destroy();
-      book.destroy();
+      cancelled = true;
+      rendition?.destroy();
+      book?.destroy();
       bookRef.current = null;
       renditionRef.current = null;
     };
