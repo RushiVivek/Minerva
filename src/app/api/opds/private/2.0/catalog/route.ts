@@ -22,7 +22,7 @@ export async function GET(request: Request) {
           type: "application/opds+json",
         },
       ],
-      navigation: collections.map((collection) => ({
+      navigation: collections.filter((collection) => !collection.parentId).map((collection) => ({
         title: collection.name,
         subtitle: collection.description ?? undefined,
         links: [{

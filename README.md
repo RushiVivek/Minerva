@@ -61,14 +61,24 @@ configured separately to load `.env` first and `.env.local` second, with
 `.env.local` taking precedence, so `npm run db:migrate` and
 `npm run db:generate` can use the same local configuration.
 
-Generate an admin password hash:
+Generate an admin password hash (Minerva uses `scrypt$...`, not Argon2):
 
 ```bash
 npm run auth:hash-password -- 'replace-with-a-strong-password'
 ```
 
-Put the output in `ADMIN_PASSWORD_HASH`, then fill in the remaining values in
+Put the complete single-line output in `ADMIN_PASSWORD_HASH`, then fill in the remaining values in
 `.env.local`.
+
+To diagnose admin login without printing the hash:
+
+```bash
+npm run auth:check -- 'your-password'
+```
+
+After changing `.env.local`, restart `npm run dev` or redeploy Vercel. The
+running server does not reload environment variables for an already-started
+process.
 
 Run the database migration and development server:
 
@@ -187,9 +197,11 @@ Readest-native book, bookmark, highlight, and note synchronization.
 The browser upload page is available at `/admin`. It sends admin Basic Auth
 over HTTPS to the upload endpoint.
 
-The home page (`/`) provides a public library view with search, book cards, and
-download links. The admin page provides upload, metadata editing, visibility
-changes, deletion, and library statistics.
+The home page (`/`) provides a public-only library view with search, book cards,
+and download links. Private books are not returned by that page or its public
+OPDS feed; they require the private OPDS URL and authentication. The admin page
+provides upload, metadata editing, visibility changes, deletion, and library
+statistics.
 
 Create a client token with:
 

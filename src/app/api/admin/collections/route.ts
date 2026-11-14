@@ -10,6 +10,7 @@ const collectionSchema = z.object({
   name: z.string().trim().min(1).max(100),
   slug: z.string().trim().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   description: z.string().trim().max(500).nullable().optional(),
+  parentId: z.string().uuid().nullable().optional(),
 });
 
 export async function GET() {
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
     const [collection] = await getDb().insert(collections).values({
       ...parsed.data,
       description: parsed.data.description ?? null,
+      parentId: parsed.data.parentId ?? null,
     }).returning();
     return NextResponse.json(collection, { status: 201 });
   } catch (error) {

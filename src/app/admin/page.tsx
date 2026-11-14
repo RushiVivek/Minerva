@@ -16,21 +16,12 @@ type Book = {
   visibility: "public" | "private";
   authors: string[];
 };
-
-const emptyBook: Omit<Book, "id"> = {
-  title: "",
-  subtitle: null,
-  description: null,
-  language: "en",
-  publisher: null,
-  identifier: null,
-  visibility: "public",
-  authors: [],
-};
+type Collection = { id: string; name: string; slug: string; parentId: string | null };
 
 export default function AdminPage() {
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [books, setBooks] = useState<Book[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [editing, setEditing] = useState<Book | null>(null);
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
@@ -46,11 +37,34 @@ export default function AdminPage() {
 
   async function loadBooks() {
     if (!credentials.username || !credentials.password) return;
-    const response = await fetch("/api/admin/books/list", {
+    const [response, collectionResponse] = await Promise.all([
+      fetch("/api/admin/books/list", {
       headers: { Authorization: authHeader },
-    });
+      }),
+      fetch("/api/admin/collections", { headers: { Authorization: authHeader } }),
+    ]);
     if (response.ok) setBooks(await response.json());
+    if (collectionResponse.ok) setCollections(await collectionResponse.json());
     else setMessage("Could not load books. Check your admin credentials.");
+  }
+
+  async function createCollection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const response = await fetch("/api/admin/collections", {
+      method: "POST",
+      headers: { Authorization: authHeader, "content-type": "application/json" },
+      body: JSON.stringify({
+        name: form.get("name"),
+        slug: form.get("slug"),
+        parentId: form.get("parentId") || null,
+      }),
+    });
+    setMessage(response.ok ? "Folder created." : "Could not create folder.");
+    if (response.ok) {
+      event.currentTarget.reset();
+      await loadBooks();
+    }
   }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -132,6 +146,20 @@ export default function AdminPage() {
             <div className="field-wrap full"><label>Admin password</label><input className="field" type="password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} required /></div>
             <div className="field-wrap"><label>EPUB file</label><input className="field" name="file" type="file" accept=".epub,application/epub+zip" required /></div>
             <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue="public"><option value="public">Public library</option><option value="private">Private library</option></select></div>
+            <div className="field-wrap"><label>Folder</label><select className="field" name="collectionId" defaultValue=""><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></div>
+          </div>
+
+          <div className="panel" style={{ marginBottom: 28 }}>
+            <h2>Create a catalogue folder</h2>
+            <p className="muted">Folders can be nested to create sub-folders.</p>
+            <form onSubmit={createCollection}>
+              <div className="form-grid">
+                <div className="field-wrap"><label>Name</label><input className="field" name="name" placeholder="Science Fiction" required /></div>
+                <div className="field-wrap"><label>Slug</label><input className="field" name="slug" placeholder="science-fiction" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></div>
+                <div className="field-wrap full"><label>Parent folder</label><select className="field" name="parentId" defaultValue=""><option value="">Top level</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></div>
+              </div>
+              <div className="actions"><button className="button secondary" type="submit">Create folder</button></div>
+            </form>
           </div>
           <div className="actions"><button className="button secondary" type="button" onClick={() => void loadBooks()}>Load library</button><button className="button" type="submit">Upload EPUB</button></div>
         </form>

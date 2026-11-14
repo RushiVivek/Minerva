@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
-import { authors, bookAuthors, books } from "@/db/schema";
+import { authors, bookAuthors, bookCollections, books, collections } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
 import { extractEpubMetadata, validateEpub } from "@/lib/epub";
 import { uploadRawBook } from "@/lib/cloudinary";
@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     const metadata = extractEpubMetadata(buffer);
     const checksum = createHash("sha256").update(buffer).digest("hex");
     const visibility = formData.get("visibility") === "private" ? "private" : "public";
+    const collectionId = formData.get("collectionId");
     const publicId = `minerva/books/${checksum}`;
     const uploaded = await uploadRawBook(buffer, publicId);
     const book = await getDb().transaction(async (tx) => {
@@ -54,6 +55,15 @@ export async function POST(request: Request) {
           bookId: createdBook.id,
           authorId: author.id,
         });
+      }
+      if (typeof collectionId === "string" && collectionId) {
+        const [collection] = await tx.select({ id: collections.id }).from(collections).where(eq(collections.id, collectionId)).limit(1);
+        if (collection) {
+          await tx.insert(bookCollections).values({
+            bookId: createdBook.id,
+            collectionId: collection.id,
+          });
+        }
       }
       return createdBook;
     });

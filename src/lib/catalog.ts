@@ -95,15 +95,17 @@ export async function listCatalogBooks(options: {
 export async function listCatalogCollections(includePrivate: boolean) {
   const rows = await getDb()
     .select({
+      id: collections.id,
       slug: collections.slug,
       name: collections.name,
       description: collections.description,
+      parentId: collections.parentId,
     })
     .from(collections)
     .innerJoin(bookCollections, eq(bookCollections.collectionId, collections.id))
     .innerJoin(books, eq(books.id, bookCollections.bookId))
     .where(includePrivate ? undefined : eq(books.visibility, "public"))
-    .groupBy(collections.slug, collections.name, collections.description)
+    .groupBy(collections.id, collections.slug, collections.name, collections.description, collections.parentId)
     .orderBy(asc(collections.name));
   return rows;
 }

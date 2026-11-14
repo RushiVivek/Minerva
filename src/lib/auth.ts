@@ -67,7 +67,7 @@ export async function authenticateRequest(authorization: string | null) {
       username &&
       passwordHash &&
       basic.username === username &&
-      verifyPassword(basic.password, passwordHash)
+      verifyPassword(basic.password, passwordHash.trim())
     ) {
       return { kind: "admin" as const, tokenId: null };
     }
