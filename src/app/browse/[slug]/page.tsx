@@ -1,6 +1,12 @@
-import { BrowseCatalog } from "@/components/BrowseCatalog";
+import { BrowseCatalog, type BrowseSearchParams } from "@/components/BrowseCatalog";
 
-export default async function FolderPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function FolderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: BrowseSearchParams;
+}) {
   const { slug } = await params;
-  return <BrowseCatalog endpoint={`/api/opds/2.0/catalog/${encodeURIComponent(slug)}`} title={slug.replaceAll("-", " ")} />;
+  return <BrowseCatalog slug={slug} searchParams={searchParams} />;
 }

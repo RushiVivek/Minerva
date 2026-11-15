@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { books } from "@/db/schema";
 import { authenticateRequest } from "@/lib/auth";
+import { isUuid } from "@/lib/catalog";
 import { rawAssetUrl } from "@/lib/cloudinary";
 
 function downloadName(title: string) {
@@ -21,11 +22,9 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const [book] = await getDb()
-    .select()
-    .from(books)
-    .where(eq(books.id, id))
-    .limit(1);
+  const [book] = isUuid(id)
+    ? await getDb().select().from(books).where(eq(books.id, id)).limit(1)
+    : [];
   if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
 
   if (book.visibility === "private") {
@@ -49,7 +48,7 @@ export async function GET(
     headers: {
       "content-type": "application/epub+zip",
       "content-disposition": `attachment; filename="${downloadName(book.title)}"; filename*=UTF-8''${encodeURIComponent(downloadName(book.title))}`,
-      "cache-control": "private, max-age=60",
+      "cache-control": "private, max-age=86400",
     },
   });
 }

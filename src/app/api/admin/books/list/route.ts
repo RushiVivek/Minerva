@@ -10,7 +10,7 @@ export async function GET() {
       return NextResponse.json({ error: "Admin authentication required" }, { status: 403 });
     }
     return NextResponse.json(
-      await listCatalogBooks({ includePrivate: true, limit: 100 }),
+      await listCatalogBooks({ includePrivate: true, limit: 500 }),
     );
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {

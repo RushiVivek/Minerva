@@ -1,11 +1,12 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getDb } from "@/db/client";
 import { authors, bookAuthors, bookCollections, books } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
-import { deleteRawBook, uploadCoverImage } from "@/lib/cloudinary";
+import { isUuid } from "@/lib/catalog";
+import { deleteCoverImage, deleteRawBook, uploadCoverImage } from "@/lib/cloudinary";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(500),
@@ -56,7 +57,9 @@ export async function PATCH(
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid book metadata" }, { status: 400 });
     }
-    const existing = await getDb().select().from(books).where(eq(books.id, id)).limit(1);
+    const existing = isUuid(id)
+      ? await getDb().select().from(books).where(eq(books.id, id)).limit(1)
+      : [];
     if (!existing[0]) return NextResponse.json({ error: "Book not found" }, { status: 404 });
 
     let coverCloudinaryPublicId = existing[0].coverCloudinaryPublicId;
@@ -77,10 +80,23 @@ export async function PATCH(
         .update(books)
         .set({ ...bookMetadata, coverCloudinaryPublicId, updatedAt: new Date() })
         .where(eq(books.id, id));
-      await tx.delete(bookAuthors).where(eq(bookAuthors.bookId, id));
-      if (author) {
-        const [createdAuthor] = await tx.insert(authors).values({ name: author }).returning();
-        await tx.insert(bookAuthors).values({ bookId: id, authorId: createdAuthor.id });
+      // The form shows all authors as one string. Leave them alone unless that
+      // string was edited, so saving other fields never merges co-authors.
+      const current = await tx
+        .select({ name: authors.name })
+        .from(bookAuthors)
+        .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+        .where(eq(bookAuthors.bookId, id))
+        .orderBy(authors.name);
+      if ((author ?? "") !== current.map((row) => row.name).join(", ")) {
+        await tx.delete(bookAuthors).where(eq(bookAuthors.bookId, id));
+        if (author) {
+          const [sameName] = await tx.select().from(authors).where(eq(authors.name, author)).limit(1);
+          const [target] = sameName
+            ? [sameName]
+            : await tx.insert(authors).values({ name: author }).returning();
+          await tx.insert(bookAuthors).values({ bookId: id, authorId: target.id });
+        }
       }
       if (collectionId !== undefined) {
         await tx.delete(bookCollections).where(eq(bookCollections.bookId, id));
@@ -109,10 +125,23 @@ export async function DELETE(
       return NextResponse.json({ error: "Admin authentication required" }, { status: 403 });
     }
     const { id } = await context.params;
-    const [book] = await getDb().select().from(books).where(eq(books.id, id)).limit(1);
+    const [book] = isUuid(id)
+      ? await getDb().select().from(books).where(eq(books.id, id)).limit(1)
+      : [];
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
+    // Older duplicate uploads can point at the same stored file.
+    const [sharesFile] = await getDb()
+      .select({ id: books.id })
+      .from(books)
+      .where(and(eq(books.cloudinaryPublicId, book.cloudinaryPublicId), ne(books.id, id)))
+      .limit(1);
     await getDb().delete(books).where(eq(books.id, id));
-    await deleteRawBook(book.cloudinaryPublicId);
+    // The book is gone from the library either way; a failed cleanup only
+    // leaves an unreferenced file behind.
+    await Promise.all([
+      sharesFile ? null : deleteRawBook(book.cloudinaryPublicId),
+      book.coverCloudinaryPublicId ? deleteCoverImage(book.coverCloudinaryPublicId) : null,
+    ]).catch((error) => console.error("Failed to remove stored files for deleted book", error));
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {

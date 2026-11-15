@@ -10,6 +10,7 @@ import { and, eq } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { apiTokens } from "@/db/schema";
+import { clientKey, isLockedOut, recordFailure } from "@/lib/rate-limit";
 
 export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -59,6 +60,17 @@ export function verifyPassword(password: string, encoded: string) {
 }
 
 export async function authenticateRequest(authorization: string | null) {
+  if (!authorization) return null;
+  // Too many wrong credentials from this address: refuse without checking, so
+  // neither the password nor a token can be guessed at speed.
+  const limitKey = clientKey(await headers(), "api");
+  if (await isLockedOut(limitKey)) return null;
+  const principal = await checkCredentials(authorization);
+  if (!principal) await recordFailure(limitKey);
+  return principal;
+}
+
+async function checkCredentials(authorization: string) {
   const basic = parseBasicCredentials(authorization);
   if (basic) {
     const username = process.env.ADMIN_USERNAME;
@@ -73,7 +85,7 @@ export async function authenticateRequest(authorization: string | null) {
     }
   }
 
-  if (!authorization?.startsWith("Bearer ")) return null;
+  if (!authorization.startsWith("Bearer ")) return null;
   const tokenHash = hashToken(authorization.slice(7));
   const [token] = await getDb()
     .select({ id: apiTokens.id })

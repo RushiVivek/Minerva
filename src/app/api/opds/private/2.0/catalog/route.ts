@@ -1,38 +1,29 @@
 import { NextResponse } from "next/server";
 
-import { listCatalogBooks, listCatalogCollections } from "@/lib/catalog";
 import { requireAuthentication } from "@/lib/auth";
-import { toOpdsPublication } from "@/lib/opds";
+import { browseCatalog } from "@/lib/catalog";
+import { opdsRequestParams, toOpdsFeed } from "@/lib/opds";
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ slug?: string }> },
+) {
   try {
     await requireAuthentication();
     const url = new URL(request.url);
-    const books = await listCatalogBooks({
-      includePrivate: true,
-      query: url.searchParams.get("q") ?? undefined,
-    });
-    const collections = await listCatalogCollections(true);
-    return NextResponse.json({
-      metadata: { title: "Minerva Private Library", numberOfItems: books.length },
-      links: [
-        {
-          rel: "self",
-          href: `${url.origin}/api/opds/private/2.0/catalog`,
-          type: "application/opds+json",
-        },
-      ],
-      navigation: collections.filter((collection) => !collection.parentId).map((collection) => ({
-        title: collection.name,
-        subtitle: collection.description ?? undefined,
-        links: [{
-          rel: "subsection",
-          href: `${url.origin}/api/opds/private/2.0/catalog/${encodeURIComponent(collection.slug)}`,
-          type: "application/opds+json",
-        }],
-      })),
-      publications: books.map((book) => toOpdsPublication(book, url.origin)),
-    });
+    // The root catalog route has no params; the folder route re-exports this handler.
+  const slug = (await context.params)?.slug;
+    const params = opdsRequestParams(url);
+    const view = await browseCatalog({ includePrivate: true, slug, ...params });
+    if (!view) return NextResponse.json({ error: "Collection not found" }, { status: 404 });
+    return NextResponse.json(
+      toOpdsFeed(view, {
+        baseUrl: url.origin,
+        catalogPath: "/api/opds/private/2.0/catalog",
+        title: "Minerva Private Library",
+        ...params,
+      }),
+    );
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json(

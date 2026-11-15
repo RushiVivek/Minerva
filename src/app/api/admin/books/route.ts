@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { authors, bookAuthors, bookCollections, books, collections } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
-import { extractEpubMetadata, validateEpub } from "@/lib/epub";
-import { uploadRawBook } from "@/lib/cloudinary";
+import { EpubError, extractEpubMetadata, validateEpub } from "@/lib/epub";
+import { uploadCoverImage, uploadRawBook } from "@/lib/cloudinary";
 
 export async function POST(request: Request) {
   try {
@@ -28,6 +28,23 @@ export async function POST(request: Request) {
     const checksum = createHash("sha256").update(buffer).digest("hex");
     const visibility = formData.get("visibility") === "private" ? "private" : "public";
     const collectionId = formData.get("collectionId");
+    // Books are stored by checksum, so a second copy would share (and on
+    // deletion take down) the first copy's file. The identifier is unique too.
+    const [duplicate] = await getDb()
+      .select({ title: books.title })
+      .from(books)
+      .where(
+        metadata.identifier
+          ? or(eq(books.checksum, checksum), eq(books.identifier, metadata.identifier))
+          : eq(books.checksum, checksum),
+      )
+      .limit(1);
+    if (duplicate) {
+      return NextResponse.json(
+        { error: `This book is already in the library as “${duplicate.title}”.` },
+        { status: 409 },
+      );
+    }
     const publicId = `minerva/books/${checksum}`;
     const uploaded = await uploadRawBook(buffer, publicId);
     const book = await getDb().transaction(async (tx) => {
@@ -68,12 +85,23 @@ export async function POST(request: Request) {
       return createdBook;
     });
 
+    if (metadata.cover && metadata.cover.data.length <= 5 * 1024 * 1024) {
+      // The book is already saved; a cover that fails to store can be added by hand.
+      try {
+        const coverPublicId = `minerva/covers/${book.id}`;
+        await uploadCoverImage(Buffer.from(metadata.cover.data), coverPublicId, metadata.cover.contentType);
+        await getDb().update(books).set({ coverCloudinaryPublicId: coverPublicId }).where(eq(books.id, book.id));
+      } catch (error) {
+        console.error("Failed to store the book's cover", error);
+      }
+    }
+
     return NextResponse.json({ id: book.id }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
-    if (error instanceof Error) {
+    if (error instanceof EpubError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("Failed to upload book", error);

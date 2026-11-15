@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { LibraryShell } from "@/components/LibraryShell";
+import { md5 } from "@/lib/md5";
 
 type Book = {
   id: string;
@@ -30,6 +31,7 @@ export default function AdminPage() {
   const [editing, setEditing] = useState<Book | null>(null);
   const [bookMessage, setBookMessage] = useState("");
   const [folderMessage, setFolderMessage] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
   const [query, setQuery] = useState("");
   const [pendingAction, setPendingAction] = useState<ProtectedAction | null>(null);
   const [pendingLabel, setPendingLabel] = useState("");
@@ -80,6 +82,33 @@ export default function AdminPage() {
     await action(authorization);
   }
 
+  function signOut() {
+    window.sessionStorage.removeItem(SESSION_AUTH_KEY);
+    setAuthorization(null);
+    setBooks([]);
+    setCollections([]);
+  }
+
+  /** Drops rejected credentials so the next action asks for them again. */
+  async function failure(response: Response, fallback: string) {
+    if (response.status === 401) {
+      signOut();
+      return "Those admin credentials were not accepted. Try again.";
+    }
+    const result = await response.json().catch(() => ({}));
+    return typeof result.error === "string" ? result.error : fallback;
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setPendingAction(null);
+      setEditing(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   async function loadBooks(authorization: string) {
     const [response, collectionResponse] = await Promise.all([
       fetch("/api/admin/books/list", {
@@ -89,14 +118,12 @@ export default function AdminPage() {
     ]);
     if (response.ok) {
       setBooks(await response.json());
+      setBookMessage("");
     } else {
-      setBookMessage("Could not load books. Check your admin credentials.");
+      setBookMessage(await failure(response, "Could not load books."));
     }
-    if (collectionResponse.ok) {
-      setCollections(await collectionResponse.json());
-    } else {
-      setFolderMessage("Could not load folders. Check your admin credentials.");
-    }
+    if (collectionResponse.ok) setCollections(await collectionResponse.json());
+    else if (collectionResponse.status !== 401) setFolderMessage("Could not load folders.");
   }
 
   async function createCollection(event: FormEvent<HTMLFormElement>) {
@@ -113,11 +140,32 @@ export default function AdminPage() {
           parentId: form.get("parentId") || null,
         }),
       });
-      const result = await response.json().catch(() => ({}));
-      setFolderMessage(response.ok ? "Folder created." : result.error ?? "Could not create folder.");
+      setFolderMessage(response.ok ? "Folder created." : await failure(response, "Could not create folder."));
       if (response.ok) {
         formElement.reset();
         await loadBooks(authorization);
+      }
+    });
+  }
+
+  async function createSyncAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    requestCredentials("create this sync account", async (authorization) => {
+      const response = await fetch("/users/create", {
+        method: "POST",
+        headers: { Authorization: authorization, "content-type": "application/json" },
+        // The KOReader protocol never sends the password itself, only its MD5.
+        body: JSON.stringify({ username: form.get("username"), password: md5(String(form.get("password"))) }),
+      });
+      if (response.ok) {
+        formElement.reset();
+        setSyncMessage("Account created. Sign in with it in Readest and in the web reader.");
+      } else if (response.status === 402) {
+        setSyncMessage("That username is already taken.");
+      } else {
+        setSyncMessage(await failure(response, "Could not create the account."));
       }
     });
   }
@@ -133,8 +181,7 @@ export default function AdminPage() {
         body: data,
         headers: { Authorization: authorization },
       });
-      const result = await response.json().catch(() => ({}));
-      setBookMessage(response.ok ? "Book uploaded successfully." : result.error ?? "Upload failed.");
+      setBookMessage(response.ok ? "Book uploaded successfully." : await failure(response, "Upload failed."));
       if (response.ok) {
         formElement.reset();
         await loadBooks(authorization);
@@ -153,7 +200,7 @@ export default function AdminPage() {
         headers: { Authorization: authorization },
         body: form,
       });
-      setBookMessage(response.ok ? "Metadata saved." : "Could not save metadata.");
+      setBookMessage(response.ok ? "Metadata saved." : await failure(response, "Could not save metadata."));
       if (response.ok) {
         setEditing(null);
         await loadBooks(authorization);
@@ -168,7 +215,7 @@ export default function AdminPage() {
         method: "DELETE",
         headers: { Authorization: authorization },
       });
-      setBookMessage(response.ok ? "Book deleted." : "Could not delete book.");
+      setBookMessage(response.ok ? "Book deleted." : await failure(response, "Could not delete book."));
       if (response.ok) await loadBooks(authorization);
     });
   }
@@ -197,25 +244,28 @@ export default function AdminPage() {
             <div className="eyebrow">Manage</div>
             <h2 id="book-management">Book management</h2>
           </div>
-          <button className="button secondary" type="button" onClick={() => requestCredentials("load the library", loadBooks)}>Load library</button>
+          <div className="row-actions">
+            <button className="button secondary" type="button" onClick={() => requestCredentials("load the library", loadBooks)}>{authorization ? "Refresh" : "Sign in"}</button>
+            {authorization && <button className="button secondary" type="button" onClick={signOut}>Sign out</button>}
+          </div>
         </div>
         <div className="panel" style={{ marginBottom: 28 }}>
           <h2>Upload a new book</h2>
           <p className="muted">EPUB metadata is extracted automatically. You can refine it after upload.</p>
           <form onSubmit={upload} encType="multipart/form-data">
             <div className="form-grid">
-              <div className="field-wrap"><label>EPUB file</label><input className="field" name="file" type="file" accept=".epub,application/epub+zip" required /></div>
-              <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue="public"><option value="public">Public library</option><option value="private">Private library</option></select></div>
-              <div className="field-wrap"><label>Folder</label><select className="field" name="collectionId" defaultValue=""><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></div>
+              <label className="field-wrap"><span>EPUB file</span><input className="field" name="file" type="file" accept=".epub,application/epub+zip" required /></label>
+              <label className="field-wrap"><span>Visibility</span><select className="field" name="visibility" defaultValue="public"><option value="public">Public library</option><option value="private">Private library</option></select></label>
+              <label className="field-wrap"><span>Folder</span><select className="field" name="collectionId" defaultValue=""><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></label>
             </div>
             <div className="actions"><button className="button" type="submit">Upload EPUB</button></div>
           </form>
-          {bookMessage && <p className="muted" role="status">{bookMessage}</p>}
+          <p className="status" role="status">{bookMessage}</p>
         </div>
 
         <div className="toolbar">
           <h2>Your books</h2>
-          <input className="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter books..." />
+          <input className="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter books" aria-label="Filter books" />
         </div>
         {visibleBooks.length === 0 ? <div className="empty">No books to show yet.</div> : (
           <div className="panel table-wrap">
@@ -247,31 +297,52 @@ export default function AdminPage() {
           <p className="muted">Create top-level folders or nest them under an existing folder.</p>
           <form onSubmit={createCollection}>
             <div className="form-grid">
-              <div className="field-wrap"><label>Name</label><input className="field" name="name" placeholder="Science Fiction" required /></div>
-              <div className="field-wrap"><label>Slug</label><input className="field" name="slug" placeholder="science-fiction" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></div>
-              <div className="field-wrap full"><label>Parent folder</label><select className="field" name="parentId" defaultValue=""><option value="">Top level</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></div>
+              <label className="field-wrap"><span>Name</span><input className="field" name="name" placeholder="Science Fiction" required /></label>
+              <label className="field-wrap"><span>Slug</span><input className="field" name="slug" placeholder="science-fiction" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></label>
+              <label className="field-wrap full"><span>Parent folder</span><select className="field" name="parentId" defaultValue=""><option value="">Top level</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></label>
             </div>
             <div className="actions"><button className="button secondary" type="submit">Create folder</button></div>
           </form>
-          {folderMessage && <p className="muted" role="status">{folderMessage}</p>}
+          <p className="status" role="status">{folderMessage}</p>
+        </div>
+      </section>
+
+      <section aria-labelledby="sync-management" style={{ marginTop: 48 }}>
+        <div className="toolbar">
+          <div>
+            <div className="eyebrow">Manage</div>
+            <h2 id="sync-management">Reading sync</h2>
+          </div>
+        </div>
+        <div className="panel">
+          <h2>Create a sync account</h2>
+          <p className="muted">Readest (Settings → Integrations → KOReader Sync) and the web reader sign in with this account to share your reading position. Apps cannot register accounts themselves.</p>
+          <form onSubmit={createSyncAccount}>
+            <div className="form-grid">
+              <label className="field-wrap"><span>Username</span><input className="field" name="username" autoComplete="off" pattern="[^:]+" required /></label>
+              <label className="field-wrap"><span>Password</span><input className="field" name="password" type="password" autoComplete="new-password" required /></label>
+            </div>
+            <div className="actions"><button className="button secondary" type="submit">Create account</button></div>
+          </form>
+          <p className="status" role="status">{syncMessage}</p>
         </div>
       </section>
 
       {editing && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null); }}>
-        <div className="modal">
+        <div className="modal" role="dialog" aria-modal="true" aria-label="Edit book">
           <div className="topbar"><div><div className="eyebrow">Book editor</div><h2>Edit metadata</h2></div><button className="button secondary" type="button" onClick={(event) => { event.stopPropagation(); setEditing(null); }}>Close</button></div>
           <form onSubmit={saveBook} encType="multipart/form-data">
             <div className="form-grid">
-              <div className="field-wrap full"><label>Title</label><input className="field" name="title" defaultValue={editing.title} required /></div>
-              <div className="field-wrap"><label>Author</label><input className="field" name="author" defaultValue={editing.authors.join(", ")} /></div>
-              <div className="field-wrap"><label>Language</label><input className="field" name="language" defaultValue={editing.language} required /></div>
-              <div className="field-wrap"><label>Subtitle</label><input className="field" name="subtitle" defaultValue={editing.subtitle ?? ""} /></div>
-              <div className="field-wrap"><label>Publisher</label><input className="field" name="publisher" defaultValue={editing.publisher ?? ""} /></div>
-              <div className="field-wrap"><label>Identifier</label><input className="field" name="identifier" defaultValue={editing.identifier ?? ""} /></div>
-              <div className="field-wrap"><label>Visibility</label><select className="field" name="visibility" defaultValue={editing.visibility}><option value="public">Public</option><option value="private">Private</option></select></div>
-              <div className="field-wrap"><label>Folder</label><select className="field" name="collectionId" defaultValue={editing.collectionId ?? ""}><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></div>
-              <div className="field-wrap"><label>Cover image</label><input className="field" name="cover" type="file" accept="image/jpeg,image/png,image/webp" /></div>
-              <div className="field-wrap full"><label>Description</label><textarea className="field" name="description" defaultValue={editing.description ?? ""} /></div>
+              <label className="field-wrap full"><span>Title</span><input className="field" name="title" defaultValue={editing.title} required /></label>
+              <label className="field-wrap"><span>Author</span><input className="field" name="author" defaultValue={editing.authors.join(", ")} /></label>
+              <label className="field-wrap"><span>Language</span><input className="field" name="language" defaultValue={editing.language} required /></label>
+              <label className="field-wrap"><span>Subtitle</span><input className="field" name="subtitle" defaultValue={editing.subtitle ?? ""} /></label>
+              <label className="field-wrap"><span>Publisher</span><input className="field" name="publisher" defaultValue={editing.publisher ?? ""} /></label>
+              <label className="field-wrap"><span>Identifier</span><input className="field" name="identifier" defaultValue={editing.identifier ?? ""} /></label>
+              <label className="field-wrap"><span>Visibility</span><select className="field" name="visibility" defaultValue={editing.visibility}><option value="public">Public</option><option value="private">Private</option></select></label>
+              <label className="field-wrap"><span>Folder</span><select className="field" name="collectionId" defaultValue={editing.collectionId ?? ""}><option value="">No folder</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.parentId ? "↳ " : ""}{collection.name}</option>)}</select></label>
+              <label className="field-wrap"><span>Cover image</span><input className="field" name="cover" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+              <label className="field-wrap full"><span>Description</span><textarea className="field" name="description" defaultValue={editing.description ?? ""} /></label>
             </div>
             <div className="actions"><button className="button" type="submit">Save changes</button></div>
           </form>
@@ -279,15 +350,15 @@ export default function AdminPage() {
       </div>}
 
       {pendingAction && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setPendingAction(null); setPendingLabel(""); } }}>
-        <div className="modal">
+        <div className="modal" role="dialog" aria-modal="true" aria-label="Admin sign-in">
           <div className="topbar">
             <div><div className="eyebrow">Admin authentication</div><h2>Confirm to {pendingLabel}</h2></div>
             <button className="button secondary" type="button" onClick={() => { setPendingAction(null); setPendingLabel(""); }}>Cancel</button>
           </div>
           <form onSubmit={confirmCredentials}>
             <div className="form-grid">
-              <div className="field-wrap full"><label>Admin username</label><input className="field" value={credentials.username} onChange={(event) => setCredentials({ ...credentials, username: event.target.value })} autoFocus required /></div>
-              <div className="field-wrap full"><label>Admin password</label><input className="field" type="password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} required /></div>
+              <label className="field-wrap full"><span>Admin username</span><input className="field" value={credentials.username} onChange={(event) => setCredentials({ ...credentials, username: event.target.value })} autoComplete="username" autoFocus required /></label>
+              <label className="field-wrap full"><span>Admin password</span><input className="field" type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} required /></label>
             </div>
             <div className="actions"><button className="button" type="submit">Continue</button></div>
           </form>

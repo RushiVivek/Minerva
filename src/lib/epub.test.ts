@@ -21,8 +21,34 @@ describe("EPUB metadata extraction", () => {
       language: "en",
       identifier: "isbn:123",
       creator: "Author",
+      cover: null,
     });
 
+  });
+
+  it("finds the declared cover image", () => {
+    const container = strToU8(
+      `<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>`,
+    );
+    const image = new Uint8Array([1, 2, 3]);
+    const epub3 = zipSync({
+      "META-INF/container.xml": container,
+      "OEBPS/content.opf": strToU8(
+        `<package><manifest><item id="c" href="images/my%20cover.jpg" media-type="image/jpeg" properties="cover-image"/></manifest></package>`,
+      ),
+      "OEBPS/images/my cover.jpg": image,
+    });
+    expect(extractEpubMetadata(Buffer.from(epub3)).cover).toEqual({ data: image, contentType: "image/jpeg" });
+
+    const epub2 = zipSync({
+      "META-INF/container.xml": container,
+      "OEBPS/content.opf": strToU8(
+        `<package><metadata><meta name="cover" content="img1"/></metadata>` +
+          `<manifest><item href="../cover.png" id="img1" media-type="image/png"/></manifest></package>`,
+      ),
+      "cover.png": image,
+    });
+    expect(extractEpubMetadata(Buffer.from(epub2)).cover).toEqual({ data: image, contentType: "image/png" });
   });
 
   it("rejects malformed EPUB archives", () => {

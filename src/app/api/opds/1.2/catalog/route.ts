@@ -5,7 +5,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   let books;
   try {
-    books = await listCatalogBooks({ includePrivate: false });
+    books = await listCatalogBooks({ includePrivate: false, limit: 500 });
   } catch (error) {
     console.error("Failed to load OPDS 1.2 catalog", error);
     return new NextResponse("Catalog unavailable", { status: 503 });

@@ -8,6 +8,7 @@ import {
   uuid,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const visibility = pgEnum("visibility", ["public", "private"]);
@@ -50,7 +51,9 @@ export const collections = pgTable("collections", {
   name: text("name").notNull().unique(),
   slug: text("slug").notNull().unique(),
   description: text("description"),
-  parentId: uuid("parent_id"),
+  parentId: uuid("parent_id").references((): AnyPgColumn => collections.id, {
+    onDelete: "set null",
+  }),
 });
 
 export const bookCollections = pgTable(
@@ -146,3 +149,10 @@ export const readingProgress = pgTable(
     ),
   }),
 );
+
+/** Failed sign-in attempts per client, kept in Postgres so every serverless instance sees them. */
+export const authFailures = pgTable("auth_failures", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  windowStart: timestamp("window_start", { withTimezone: true }).defaultNow().notNull(),
+});

@@ -1,23 +1,21 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
-import { listCatalogBooks } from "@/lib/catalog";
-import { Reader } from "./reader";
+import { getCatalogBook } from "@/lib/catalog";
+import { ReaderLoader } from "./reader-loader";
 
-export default async function ReadPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const book = (await listCatalogBooks({ includePrivate: false, limit: 100 })).find(
-    (item) => item.id === id,
-  );
+type Props = { params: Promise<{ id: string }> };
+
+const loadBook = cache((id: string) => getCatalogBook(id, { includePrivate: false }));
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const book = await loadBook((await params).id);
+  return { title: book?.title ?? "Book not found" };
+}
+
+export default async function ReadPage({ params }: Props) {
+  const book = await loadBook((await params).id);
   if (!book) notFound();
-
-  return (
-    <main className="reader-page">
-      <header className="reader-header">
-        <Link href={`/books/${book.id}`}>← {book.title}</Link>
-        <span className="muted">{book.authors.join(", ") || "Unknown author"}</span>
-      </header>
-      <Reader bookId={book.id} title={book.title} />
-    </main>
-  );
+  return <ReaderLoader bookId={book.id} title={book.title} author={book.authors.join(", ")} />;
 }
