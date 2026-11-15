@@ -13,6 +13,8 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
   const [font, setFont] = useState<"serif" | "sans" | "mono">("serif");
   const [fontSize, setFontSize] = useState("100%");
   const [continuous, setContinuous] = useState(false);
+  const [renditionVersion, setRenditionVersion] = useState(0);
+  const settingsRef = useRef({ layout, theme, font, fontSize, continuous });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -27,18 +29,20 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
         const archive = await response.arrayBuffer();
         if (cancelled || !containerRef.current) return;
         book = ePub(archive);
+        const settings = settingsRef.current;
         rendition = book.renderTo(containerRef.current, {
           width: "100%",
           height: "100%",
           spread: "none",
+          manager: settings.continuous ? "continuous" : "default",
+          flow: settings.layout === "scroll" ? "scrolled" : "paginated",
         });
         rendition.themes.register("light", { body: { color: "#222", background: "#f7f3e8" } });
         rendition.themes.register("dark", { body: { color: "#e8e8e8", background: "#151720" } });
         rendition.themes.register("bookish", { body: { color: "#3d3024", background: "#eadcc2" } });
-        rendition.themes.select("light");
-        rendition.themes.font("Georgia, serif");
-        rendition.themes.fontSize("100%");
-        rendition.flow("paginated");
+        rendition.themes.select(settings.theme);
+        rendition.themes.font(settings.font === "serif" ? "Georgia, serif" : settings.font === "sans" ? "Arial, sans-serif" : "monospace");
+        rendition.themes.fontSize(settings.fontSize);
         bookRef.current = book;
         renditionRef.current = rendition;
         await rendition.display();
@@ -56,7 +60,7 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
       bookRef.current = null;
       renditionRef.current = null;
     };
-  }, [bookId]);
+  }, [bookId, renditionVersion]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -83,6 +87,7 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
     setTheme(nextTheme);
     setFont(nextFont);
     setFontSize(nextFontSize);
+    settingsRef.current = { layout: nextLayout, theme: nextTheme, font: nextFont, fontSize: nextFontSize, continuous };
     const rendition = renditionRef.current;
     if (!rendition) return;
     const families = { serif: "Georgia, serif", sans: "Arial, sans-serif", mono: "monospace" };
@@ -106,7 +111,7 @@ export function Reader({ bookId, title }: { bookId: string; title: string }) {
       </div>
       <div className="reader-settings">
         <label>Layout <select value={layout} onChange={(event) => applyReaderSetting(event.target.value as "paged" | "scroll", theme, font, fontSize)}><option value="paged">Paged</option><option value="scroll">Scroll</option></select></label>
-        <label><input type="checkbox" checked={continuous} onChange={(event) => { setContinuous(event.target.checked); if (layout === "scroll") renditionRef.current?.flow(event.target.checked ? "scrolled-doc" : "scrolled"); }} /> Continuous chapters</label>
+        <label><input type="checkbox" checked={continuous} onChange={(event) => { const value = event.target.checked; setContinuous(value); settingsRef.current = { layout, theme, font, fontSize, continuous: value }; setRenditionVersion((version) => version + 1); }} /> Continuous chapters</label>
         <label>Theme <select value={theme} onChange={(event) => applyReaderSetting(layout, event.target.value as "light" | "dark" | "bookish", font, fontSize)}><option value="light">Light</option><option value="dark">Dark</option><option value="bookish">Bookish</option></select></label>
         <label>Font <select value={font} onChange={(event) => applyReaderSetting(layout, theme, event.target.value as "serif" | "sans" | "mono", fontSize)}><option value="serif">Serif</option><option value="sans">Sans</option><option value="mono">Monospace</option></select></label>
         <label>Size <select value={fontSize} onChange={(event) => applyReaderSetting(layout, theme, font, event.target.value)}><option value="85%">Small</option><option value="100%">Medium</option><option value="120%">Large</option><option value="140%">Extra large</option></select></label>
