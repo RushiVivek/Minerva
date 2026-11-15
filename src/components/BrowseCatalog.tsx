@@ -1,104 +1,97 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { notFound } from "next/navigation";
 
+import { Icon } from "@/components/Icon";
 import { LibraryShell } from "@/components/LibraryShell";
+import { SearchBox } from "@/components/SearchBox";
+import { browseCatalog, CATALOG_PAGE_SIZE } from "@/lib/catalog";
 
-type Publication = {
-  metadata: {
-    identifier: string;
-    title: string;
-    author?: { name: string }[];
-  };
-  images?: { href: string; type?: string }[];
-  links?: { rel: string; href: string }[];
-};
-type Navigation = { title: string; subtitle?: string; links?: { href: string }[] };
+export type BrowseSearchParams = Promise<{ q?: string | string[]; show?: string | string[] }>;
 
-function browserFolderUrl(apiUrl: string) {
-  const marker = "/api/opds/2.0/catalog/";
-  const index = apiUrl.indexOf(marker);
-  return index >= 0 ? `/browse/${apiUrl.slice(index + marker.length)}` : apiUrl;
-}
-
-export function BrowseCatalog({
-  endpoint,
-  title,
-  root = false,
+export async function BrowseCatalog({
+  slug,
+  searchParams,
 }: {
-  endpoint: string;
-  title: string;
-  root?: boolean;
+  slug?: string;
+  searchParams: BrowseSearchParams;
 }) {
-  const [books, setBooks] = useState<Publication[]>([]);
-  const [folders, setFolders] = useState<Navigation[]>([]);
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const params = await searchParams;
+  const query = (Array.isArray(params.q) ? params.q[0] : params.q)?.trim() ?? "";
+  const requested = Number(Array.isArray(params.show) ? params.show[0] : params.show);
+  const show = Number.isInteger(requested)
+    ? Math.min(Math.max(requested, CATALOG_PAGE_SIZE), 450)
+    : CATALOG_PAGE_SIZE;
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(true);
-      fetch(`${endpoint}${query ? `?q=${encodeURIComponent(query)}` : ""}`)
-        .then((response) => response.json())
-        .then((data) => {
-          setBooks(data.publications ?? []);
-          setFolders(data.navigation ?? []);
-        })
-        .finally(() => setLoading(false));
-    }, 180);
-    return () => clearTimeout(timer);
-  }, [endpoint, query]);
-
-  const subtitle = useMemo(
-    () => (query ? `${books.length} results for “${query}”` : `${books.length} books here`),
-    [books.length, query],
-  );
+  const view = await browseCatalog({ includePrivate: false, slug, query, limit: show });
+  if (!view) notFound();
+  const { collection, ancestors, folders, books, hasMore } = view;
+  const path = collection ? `/browse/${encodeURIComponent(collection.slug)}` : "/";
+  const count = `${books.length}${hasMore ? "+" : ""} ${books.length === 1 && !hasMore ? "book" : "books"}`;
+  const moreParams = new URLSearchParams({ ...(query ? { q: query } : {}), show: String(show + CATALOG_PAGE_SIZE) });
 
   return (
     <LibraryShell>
       <div className="topbar">
         <div>
-          <div className="eyebrow">{root ? "Your collection" : "Folder"}</div>
-          <h1>{title}</h1>
-          <div className="muted">{subtitle}</div>
-        </div>
-        <Link className="button" href="/admin">Manage library</Link>
-      </div>
-      <div className="toolbar">
-        <h2>{folders.length ? "Folders and books" : "Books"}</h2>
-        <input className="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, author..." aria-label="Search books" />
-      </div>
-      {loading ? <div className="empty">Loading your library...</div> : (
-        <>
-          {folders.length > 0 && (
-            <div className="folder-grid">
-              {folders.map((folder) => {
-                const apiUrl = folder.links?.[0]?.href ?? "";
-                return <Link className="folder-card" href={browserFolderUrl(apiUrl)} key={folder.title}><span className="folder-icon">▰</span><strong>{folder.title}</strong><span className="muted">{folder.subtitle || "Folder"}</span></Link>;
-              })}
-            </div>
+          {collection ? (
+            <nav className="crumbs" aria-label="Breadcrumb">
+              <Link href="/">Library</Link>
+              {ancestors.map((folder) => (
+                <span key={folder.id}>/ <Link href={`/browse/${encodeURIComponent(folder.slug)}`}>{folder.name}</Link></span>
+              ))}
+            </nav>
+          ) : (
+            <div className="eyebrow">Your collection</div>
           )}
-          {books.length > 0 ? (
-            <div className="book-grid">
-              {books.map((book) => {
-                const author = book.metadata.author?.map((item) => item.name).join(", ");
-                const download = book.links?.find((link) => link.rel === "acquisition")?.href;
-                const details = book.links?.find((link) => link.rel === "alternate")?.href ?? download;
-                const cover = book.images?.[0]?.href;
-                return <article className="book-card" key={book.metadata.identifier}>
-                  <Link className="cover" href={details ?? "#"} aria-label={`View ${book.metadata.title}`}>
-                    {cover ? <Image src={cover} alt="" width={400} height={600} unoptimized /> : <span>{book.metadata.title}</span>}
-                  </Link>
-                  <div className="book-title" title={book.metadata.title}>{book.metadata.title}</div>
-                  <div className="book-author">{author || "Unknown author"}</div>
-                  <Link className="badge" href={details ?? "#"}>Open book</Link>
-                </article>;
-              })}
-            </div>
-          ) : folders.length === 0 ? <div className="empty">No books found. Upload your first EPUB from Manage library.</div> : null}
-        </>
+          <h1>{collection ? collection.name : "Good books, close by."}</h1>
+          <div className="muted">
+            {query
+              ? `${count} matching “${query}”${collection ? " in this folder" : ""}`
+              : collection?.description || `${count}${folders.length ? ` · ${folders.length} ${folders.length === 1 ? "folder" : "folders"}` : ""}`}
+          </div>
+        </div>
+        <SearchBox key={path} defaultValue={query} />
+      </div>
+
+      {folders.length > 0 && (
+        <section aria-label="Folders" className="folder-grid">
+          {folders.map((folder) => (
+            <Link className="folder-card" href={`/browse/${encodeURIComponent(folder.slug)}`} key={folder.id}>
+              <Icon name="folder" />
+              <strong>{folder.name}</strong>
+              <span className="muted">{folder.description || "Folder"}</span>
+            </Link>
+          ))}
+        </section>
+      )}
+
+      {books.length > 0 ? (
+        <section aria-label="Books" className="book-grid">
+          {books.map((book) => (
+            <Link className="book-card" href={`/books/${book.id}`} key={book.id}>
+              <div className="cover">
+                {book.coverCloudinaryPublicId ? (
+                  <Image src={`/api/books/${book.id}/cover`} alt="" width={300} height={450} unoptimized />
+                ) : (
+                  <span aria-hidden="true">{book.title}</span>
+                )}
+              </div>
+              <div className="book-title">{book.title}</div>
+              <div className="book-author">{book.authors.join(", ") || "Unknown author"}</div>
+            </Link>
+          ))}
+        </section>
+      ) : folders.length === 0 ? (
+        <div className="empty">
+          {query ? `Nothing matches “${query}”.` : "No books here yet. Upload an EPUB from Manage."}
+        </div>
+      ) : null}
+
+      {hasMore && (
+        <div className="more">
+          <Link className="button secondary" href={`${path}?${moreParams}`} scroll={false}>Show more</Link>
+        </div>
       )}
     </LibraryShell>
   );

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { books, readingProgress } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
+import { isUuid } from "@/lib/catalog";
 
 const progressSchema = z.object({
   location: z.string().min(1).max(2000),
@@ -25,6 +26,7 @@ export async function GET(
       );
     }
     const { bookId } = await context.params;
+    if (!isUuid(bookId)) return NextResponse.json(null);
     const [progress] = await getDb()
       .select()
       .from(readingProgress)
@@ -67,11 +69,9 @@ export async function PUT(
       );
     }
     const { bookId } = await context.params;
-    const [book] = await getDb()
-      .select({ id: books.id })
-      .from(books)
-      .where(eq(books.id, bookId))
-      .limit(1);
+    const [book] = isUuid(bookId)
+      ? await getDb().select({ id: books.id }).from(books).where(eq(books.id, bookId)).limit(1)
+      : [];
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
 
     const parsed = progressSchema.safeParse(await request.json());

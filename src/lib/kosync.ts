@@ -1,8 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import { kosyncUsers } from "@/db/schema";
+import { clientKey, isLockedOut, recordFailure } from "@/lib/rate-limit";
 
 export const KOSYNC_ACCEPT = "application/vnd.koreader.v1+json";
 
@@ -36,6 +37,14 @@ export async function authenticateKosync(request: Request) {
   ) {
     return null;
   }
+  const limitKey = clientKey(request.headers, "kosync");
+  if (await isLockedOut(limitKey)) return null;
+  const user = await findKosyncUser(username, credential);
+  if (!user) await recordFailure(limitKey);
+  return user;
+}
+
+async function findKosyncUser(username: string, credential: string) {
   const [user] = await getDb()
     .select({ id: kosyncUsers.id, credentialHash: kosyncUsers.credentialHash })
     .from(kosyncUsers)

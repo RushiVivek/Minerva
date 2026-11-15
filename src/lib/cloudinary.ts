@@ -34,6 +34,10 @@ export async function deleteRawBook(publicId: string) {
   });
 }
 
+export async function deleteCoverImage(publicId: string) {
+  return getCloudinary().uploader.destroy(publicId, { resource_type: "image", invalidate: true });
+}
+
 export async function uploadCoverImage(
   buffer: Buffer,
   publicId: string,

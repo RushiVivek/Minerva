@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/db/client";
+import { authenticateRequest } from "@/lib/auth";
 import { kosyncUsers } from "@/db/schema";
 import {
   hashKosyncCredential,
@@ -15,7 +16,13 @@ const createSchema = z.object({
   password: z.string(),
 });
 
+// Sync clients register without credentials, which would let anyone create
+// accounts on a personal server. Accounts are created from the admin page.
 export async function POST(request: Request) {
+  const principal = await authenticateRequest(request.headers.get("authorization"));
+  if (principal?.kind !== "admin") {
+    return kosyncError("Registration is disabled. Create the account on the Minerva admin page.", 2005, 403);
+  }
   const body = await kosyncJson(request);
   const parsed = createSchema.safeParse(body);
   if (

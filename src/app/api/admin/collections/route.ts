@@ -48,6 +48,10 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
+    // Postgres unique violation: the name or slug is taken.
+    if ((error as { cause?: { code?: string } }).cause?.code === "23505" || (error as { code?: string }).code === "23505") {
+      return NextResponse.json({ error: "A folder with that name or slug already exists." }, { status: 409 });
+    }
     console.error("Failed to create collection", error);
     return NextResponse.json({ error: "Collection creation failed" }, { status: 500 });
   }

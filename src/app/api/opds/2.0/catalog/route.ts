@@ -1,51 +1,29 @@
 import { NextResponse } from "next/server";
 
-import { listCatalogBooks, listCatalogCollections } from "@/lib/catalog";
-import { toOpdsPublication } from "@/lib/opds";
+import { browseCatalog } from "@/lib/catalog";
+import { opdsRequestParams, toOpdsFeed } from "@/lib/opds";
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ slug?: string }> },
+) {
   const url = new URL(request.url);
-  const query = url.searchParams.get("q") ?? undefined;
-  const offset = Number(url.searchParams.get("offset") ?? 0);
-
+  // The root catalog route has no params; the folder route re-exports this handler.
+  const slug = (await context.params)?.slug;
+  const params = opdsRequestParams(url);
   try {
-    const books = await listCatalogBooks({ includePrivate: false, query, offset, rootOnly: true });
-  const collections = await listCatalogCollections(false);
-    const baseUrl = url.origin;
-    return NextResponse.json({
-    metadata: {
-      title: "Minerva Library",
-      numberOfItems: books.length,
-    },
-    links: [
-      {
-        rel: "self",
-        href: `${baseUrl}/api/opds/2.0/catalog`,
-        type: "application/opds+json",
-      },
-      {
-        rel: "search",
-        href: `${baseUrl}/api/opds/2.0/catalog{?q}`,
-        type: "application/opensearchdescription+xml",
-        templated: true,
-      },
-    ],
-    publications: books.map((book) => toOpdsPublication(book, baseUrl)),
-    navigation: collections.filter((collection) => !collection.parentId).map((collection) => ({
-      title: collection.name,
-      subtitle: collection.description ?? undefined,
-      links: [{
-        rel: "subsection",
-        href: `${baseUrl}/api/opds/2.0/catalog/${encodeURIComponent(collection.slug)}`,
-        type: "application/opds+json",
-      }],
-    })),
-    });
+    const view = await browseCatalog({ includePrivate: false, slug, ...params });
+    if (!view) return NextResponse.json({ error: "Collection not found" }, { status: 404 });
+    return NextResponse.json(
+      toOpdsFeed(view, {
+        baseUrl: url.origin,
+        catalogPath: "/api/opds/2.0/catalog",
+        title: "Minerva Library",
+        ...params,
+      }),
+    );
   } catch (error) {
     console.error("Failed to load OPDS catalog", error);
-    return NextResponse.json(
-      { error: "Catalog unavailable" },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: "Catalog unavailable" }, { status: 503 });
   }
 }

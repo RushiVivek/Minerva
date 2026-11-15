@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, asc, eq, exists, ilike, inArray, notExists, or, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/client";
 import {
@@ -8,6 +8,15 @@ import {
   books,
   collections,
 } from "@/db/schema";
+
+export const CATALOG_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 500;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Route params reach Postgres as uuid values; anything else must 404, not throw. */
+export function isUuid(value: string) {
+  return UUID_PATTERN.test(value);
+}
 
 export type CatalogBook = {
   id: string;
@@ -24,34 +33,44 @@ export type CatalogBook = {
   authors: string[];
 };
 
+export type CatalogCollection = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  parentId: string | null;
+};
+
 export async function listCatalogBooks(options: {
   includePrivate: boolean;
   query?: string;
   limit?: number;
   offset?: number;
-  collectionSlug?: string;
+  /** Only books filed directly in one of these collections. */
+  collectionIds?: string[];
+  /** Only books that are not filed in any collection. */
   rootOnly?: boolean;
+  id?: string;
 }): Promise<CatalogBook[]> {
-  const { includePrivate, query, limit = 50, offset = 0, collectionSlug, rootOnly = false } = options;
-  const visibilityFilter = includePrivate
-    ? undefined
-    : eq(books.visibility, "public");
-  const searchFilter = query?.trim()
-    ? or(
-        ilike(books.title, `%${query.trim()}%`),
-        ilike(books.subtitle, `%${query.trim()}%`),
-        ilike(books.description, `%${query.trim()}%`),
-        ilike(authors.name, `%${query.trim()}%`),
-      )
-    : undefined;
-  const collectionFilter = collectionSlug
-    ? eq(collections.slug, collectionSlug)
-    : undefined;
-  const rootFilter = rootOnly
-    ? isNull(bookCollections.bookId)
+  const {
+    includePrivate,
+    query,
+    limit = CATALOG_PAGE_SIZE,
+    offset = 0,
+    collectionIds,
+    rootOnly = false,
+    id,
+  } = options;
+  if (collectionIds && collectionIds.length === 0) return [];
+  const db = getDb();
+  const one = { one: sql`1` };
+  const pattern = query?.trim()
+    ? `%${query.trim().replace(/[\\%_]/g, "\\$&")}%`
     : undefined;
 
-  const rows = await getDb()
+  // Filter and paginate on books alone, so that a book with several authors or
+  // folders still counts as one row against the limit.
+  const rows = await db
     .select({
       id: books.id,
       title: books.title,
@@ -63,44 +82,105 @@ export async function listCatalogBooks(options: {
       visibility: books.visibility,
       cloudinaryPublicId: books.cloudinaryPublicId,
       coverCloudinaryPublicId: books.coverCloudinaryPublicId,
-      collectionId: collections.id,
-      author: authors.name,
     })
     .from(books)
-    .leftJoin(bookCollections, eq(bookCollections.bookId, books.id))
-    .leftJoin(collections, eq(collections.id, bookCollections.collectionId))
-    .leftJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
-    .leftJoin(authors, eq(authors.id, bookAuthors.authorId))
-    .where(and(visibilityFilter, searchFilter, collectionFilter, rootFilter))
-    .orderBy(asc(books.title))
-    .limit(Math.min(Math.max(limit, 1), 100))
+    .where(
+      and(
+        id ? eq(books.id, id) : undefined,
+        includePrivate ? undefined : eq(books.visibility, "public"),
+        pattern
+          ? or(
+              ilike(books.title, pattern),
+              ilike(books.subtitle, pattern),
+              ilike(books.description, pattern),
+              exists(
+                db
+                  .select(one)
+                  .from(bookAuthors)
+                  .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+                  .where(and(eq(bookAuthors.bookId, books.id), ilike(authors.name, pattern))),
+              ),
+            )
+          : undefined,
+        collectionIds
+          ? exists(
+              db
+                .select(one)
+                .from(bookCollections)
+                .where(
+                  and(
+                    eq(bookCollections.bookId, books.id),
+                    inArray(bookCollections.collectionId, collectionIds),
+                  ),
+                ),
+            )
+          : undefined,
+        rootOnly
+          ? notExists(
+              db.select(one).from(bookCollections).where(eq(bookCollections.bookId, books.id)),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(asc(books.title), asc(books.id))
+    .limit(Math.min(Math.max(limit, 1), MAX_PAGE_SIZE))
     .offset(Math.max(offset, 0));
+  if (rows.length === 0) return [];
 
-  const grouped = new Map<string, CatalogBook>();
-  for (const row of rows) {
-    const book = grouped.get(row.id) ?? {
-      id: row.id,
-      title: row.title,
-      subtitle: row.subtitle,
-      description: row.description,
-      language: row.language,
-      publisher: row.publisher,
-      identifier: row.identifier,
-      visibility: row.visibility,
-      cloudinaryPublicId: row.cloudinaryPublicId,
-      coverCloudinaryPublicId: row.coverCloudinaryPublicId,
-      collectionId: row.collectionId,
-      authors: [],
-    };
-    if (row.author) book.authors.push(row.author);
-    grouped.set(row.id, book);
+  const ids = rows.map((row) => row.id);
+  const authorRows = await db
+    .select({ bookId: bookAuthors.bookId, name: authors.name })
+    .from(bookAuthors)
+    .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+    .where(inArray(bookAuthors.bookId, ids))
+    .orderBy(asc(authors.name));
+  const collectionRows = await db
+    .select({ bookId: bookCollections.bookId, collectionId: bookCollections.collectionId })
+    .from(bookCollections)
+    .where(inArray(bookCollections.bookId, ids));
+
+  const authorsByBook = new Map<string, string[]>();
+  for (const row of authorRows) {
+    authorsByBook.set(row.bookId, [...(authorsByBook.get(row.bookId) ?? []), row.name]);
   }
+  const collectionByBook = new Map(collectionRows.map((row) => [row.bookId, row.collectionId]));
 
-  return [...grouped.values()];
+  return rows.map((row) => ({
+    ...row,
+    collectionId: collectionByBook.get(row.id) ?? null,
+    authors: authorsByBook.get(row.id) ?? [],
+  }));
 }
 
-export async function listCatalogCollections(includePrivate: boolean) {
-  const rows = await getDb()
+export async function getCatalogBook(id: string, options: { includePrivate: boolean }) {
+  if (!isUuid(id)) return null;
+  const [book] = await listCatalogBooks({ ...options, id, limit: 1 });
+  return book ?? null;
+}
+
+/**
+ * Keeps the collections that lead to at least one book: those holding a book
+ * directly, plus every ancestor of such a collection.
+ */
+export function collectionsWithBooks<T extends { id: string; parentId: string | null }>(
+  all: T[],
+  idsHoldingBooks: Iterable<string>,
+): T[] {
+  const byId = new Map(all.map((collection) => [collection.id, collection]));
+  const keep = new Set<string>();
+  for (const id of idsHoldingBooks) {
+    let current = byId.get(id);
+    while (current && !keep.has(current.id)) {
+      keep.add(current.id);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+  }
+  return all.filter((collection) => keep.has(collection.id));
+}
+
+export async function listCatalogCollections(includePrivate: boolean): Promise<CatalogCollection[]> {
+  const db = getDb();
+  const all = await db
     .select({
       id: collections.id,
       slug: collections.slug,
@@ -109,10 +189,84 @@ export async function listCatalogCollections(includePrivate: boolean) {
       parentId: collections.parentId,
     })
     .from(collections)
-    .innerJoin(bookCollections, eq(bookCollections.collectionId, collections.id))
-    .innerJoin(books, eq(books.id, bookCollections.bookId))
-    .where(includePrivate ? undefined : eq(books.visibility, "public"))
-    .groupBy(collections.id, collections.slug, collections.name, collections.description, collections.parentId)
     .orderBy(asc(collections.name));
-  return rows;
+  const holding = await db
+    .selectDistinct({ id: bookCollections.collectionId })
+    .from(bookCollections)
+    .innerJoin(books, eq(books.id, bookCollections.bookId))
+    .where(includePrivate ? undefined : eq(books.visibility, "public"));
+  return collectionsWithBooks(all, holding.map((row) => row.id));
+}
+
+function subtreeIds(all: CatalogCollection[], rootId: string) {
+  const ids = [rootId];
+  for (let index = 0; index < ids.length; index += 1) {
+    for (const collection of all) {
+      if (collection.parentId === ids[index] && !ids.includes(collection.id)) {
+        ids.push(collection.id);
+      }
+    }
+  }
+  return ids;
+}
+
+export type CatalogView = {
+  /** The folder being browsed; null at the library root. */
+  collection: CatalogCollection | null;
+  /** Root-first chain of folders above `collection`. */
+  ancestors: CatalogCollection[];
+  /** Sub-folders to show; empty while searching. */
+  folders: CatalogCollection[];
+  books: CatalogBook[];
+  hasMore: boolean;
+};
+
+/**
+ * One page of the library as both the web UI and the OPDS feeds show it.
+ * Browsing lists the books filed directly in the folder (or in no folder, at
+ * the root); searching looks through the folder and everything beneath it.
+ * Returns null when `slug` names no folder visible to this audience.
+ */
+export async function browseCatalog(options: {
+  includePrivate: boolean;
+  slug?: string;
+  query?: string;
+  offset?: number;
+  limit?: number;
+}): Promise<CatalogView | null> {
+  const { includePrivate, slug, offset = 0, limit = CATALOG_PAGE_SIZE } = options;
+  const query = options.query?.trim() || undefined;
+  const all = await listCatalogCollections(includePrivate);
+  const collection = slug ? all.find((item) => item.slug === slug) : null;
+  if (slug && !collection) return null;
+
+  const ancestors: CatalogCollection[] = [];
+  let parent = collection?.parentId;
+  while (parent) {
+    const found = all.find((item) => item.id === parent);
+    if (!found || ancestors.includes(found)) break;
+    ancestors.unshift(found);
+    parent = found.parentId;
+  }
+
+  const page = await listCatalogBooks({
+    includePrivate,
+    query,
+    offset,
+    limit: limit + 1,
+    collectionIds: collection
+      ? query
+        ? subtreeIds(all, collection.id)
+        : [collection.id]
+      : undefined,
+    rootOnly: !collection && !query,
+  });
+
+  return {
+    collection: collection ?? null,
+    ancestors,
+    folders: query ? [] : all.filter((item) => item.parentId === (collection?.id ?? null)),
+    books: page.slice(0, limit),
+    hasMore: page.length > limit,
+  };
 }

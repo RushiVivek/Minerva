@@ -1,39 +1,57 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { LibraryShell } from "@/components/LibraryShell";
-import { listCatalogBooks } from "@/lib/catalog";
+import { getCatalogBook, listCatalogCollections } from "@/lib/catalog";
 
-export default async function BookPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const book = (await listCatalogBooks({ includePrivate: false, limit: 100 })).find(
-    (item) => item.id === id,
-  );
+type Props = { params: Promise<{ id: string }> };
+
+const loadBook = cache((id: string) => getCatalogBook(id, { includePrivate: false }));
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const book = await loadBook((await params).id);
+  return { title: book?.title ?? "Book not found" };
+}
+
+export default async function BookPage({ params }: Props) {
+  const book = await loadBook((await params).id);
   if (!book) notFound();
+  const folder = book.collectionId
+    ? (await listCatalogCollections(false)).find((item) => item.id === book.collectionId)
+    : undefined;
 
   return (
     <LibraryShell>
-      <div className="book-detail">
+      <nav className="crumbs" aria-label="Breadcrumb">
+        <Link href="/">Library</Link>
+        {folder && <span>/ <Link href={`/browse/${encodeURIComponent(folder.slug)}`}>{folder.name}</Link></span>}
+      </nav>
+      <article className="book-detail">
         <div className="book-detail-cover cover">
           {book.coverCloudinaryPublicId ? (
-            <Image src={`/api/books/${book.id}/cover`} alt="" width={400} height={600} unoptimized />
+            <Image src={`/api/books/${book.id}/cover`} alt={`Cover of ${book.title}`} width={400} height={600} unoptimized priority />
           ) : (
-            <span>{book.title}</span>
+            <span aria-hidden="true">{book.title}</span>
           )}
         </div>
         <div className="book-detail-content">
-          <div className="eyebrow">Book details</div>
           <h1>{book.title}</h1>
+          {book.subtitle && <p className="muted">{book.subtitle}</p>}
           <p className="book-author">{book.authors.join(", ") || "Unknown author"}</p>
-          <p className="muted">{book.description || "No description available."}</p>
           <div className="actions book-actions">
             <Link className="button" href={`/read/${book.id}`}>Read</Link>
             <a className="button secondary" href={`/api/books/${book.id}/download`}>Download EPUB</a>
           </div>
-          <Link className="muted" href="/">← Back to browse</Link>
+          <p className="book-description">{book.description || "No description available."}</p>
+          <ul className="book-meta">
+            {book.publisher && <li>{book.publisher}</li>}
+            <li>Language: {book.language}</li>
+          </ul>
         </div>
-      </div>
+      </article>
     </LibraryShell>
   );
 }

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   try {
     await requireAuthentication();
     const url = new URL(request.url);
-    const books = await listCatalogBooks({ includePrivate: true });
+    const books = await listCatalogBooks({ includePrivate: true, limit: 500 });
     const entries = books
       .map(
         (book) =>
