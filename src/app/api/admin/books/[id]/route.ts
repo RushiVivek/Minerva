@@ -6,7 +6,8 @@ import { getDb } from "@/db/client";
 import { authors, bookAuthors, bookCollections, books } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
 import { isUuid } from "@/lib/catalog";
-import { deleteCoverImage, deleteRawBook, uploadCoverImage } from "@/lib/cloudinary";
+import { deleteBookFile } from "@/lib/book-storage";
+import { deleteCoverImage, uploadCoverImage } from "@/lib/cloudinary";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(500),
@@ -139,7 +140,7 @@ export async function DELETE(
     // The book is gone from the library either way; a failed cleanup only
     // leaves an unreferenced file behind.
     await Promise.all([
-      sharesFile ? null : deleteRawBook(book.cloudinaryPublicId),
+      sharesFile ? null : deleteBookFile(book),
       book.coverCloudinaryPublicId ? deleteCoverImage(book.coverCloudinaryPublicId) : null,
     ]).catch((error) => console.error("Failed to remove stored files for deleted book", error));
     return NextResponse.json({ ok: true });

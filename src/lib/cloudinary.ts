@@ -15,18 +15,6 @@ function getCloudinary() {
   return cloudinary;
 }
 
-export async function uploadRawBook(buffer: Buffer, publicId: string) {
-  return getCloudinary().uploader.upload(
-    `data:application/epub+zip;base64,${buffer.toString("base64")}`,
-    {
-      public_id: publicId,
-      resource_type: "raw",
-      overwrite: false,
-      type: "private",
-    },
-  );
-}
-
 export async function deleteRawBook(publicId: string) {
   return getCloudinary().uploader.destroy(publicId, {
     resource_type: "raw",
