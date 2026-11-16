@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, notExists } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -137,6 +137,10 @@ export async function DELETE(
       .where(and(eq(books.cloudinaryPublicId, book.cloudinaryPublicId), ne(books.id, id)))
       .limit(1);
     await getDb().delete(books).where(eq(books.id, id));
+    // Authors are only reachable through their books.
+    await getDb()
+      .delete(authors)
+      .where(notExists(getDb().select().from(bookAuthors).where(eq(bookAuthors.authorId, authors.id))));
     // The book is gone from the library either way; a failed cleanup only
     // leaves an unreferenced file behind.
     await Promise.all([

@@ -15,13 +15,6 @@ function getCloudinary() {
   return cloudinary;
 }
 
-export async function deleteRawBook(publicId: string) {
-  return getCloudinary().uploader.destroy(publicId, {
-    resource_type: "raw",
-    type: "private",
-  });
-}
-
 export async function deleteCoverImage(publicId: string) {
   return getCloudinary().uploader.destroy(publicId, { resource_type: "image", invalidate: true });
 }
@@ -40,14 +33,6 @@ export async function uploadCoverImage(
       type: "upload",
     },
   );
-}
-
-export function rawAssetUrl(publicId: string) {
-  return getCloudinary().utils.private_download_url(publicId, "epub", {
-    resource_type: "raw",
-    type: "private",
-    attachment: false,
-  });
 }
 
 export function imageAssetUrl(publicId: string) {

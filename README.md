@@ -2,8 +2,8 @@
 
 Minerva is a self-hosted EPUB library server that publishes books through
 [OPDS](https://opds-spec.org/) for Readest and other compatible reading apps.
-It is designed for deployment on Vercel, with PostgreSQL for catalog metadata
-and Cloudinary for private EPUB assets.
+It is designed for deployment on Vercel, with PostgreSQL for catalog metadata,
+Catbox for EPUB files and Cloudinary for cover images.
 
 ## Features
 
@@ -12,7 +12,8 @@ and Cloudinary for private EPUB assets.
 - Public and private/hidden books
 - Basic Auth and bearer API-token access
 - EPUB upload and metadata extraction
-- Private Cloudinary storage and protected downloads
+- EPUB storage on Catbox (up to 100 MB per book) with protected downloads
+- One-command backup of the whole library to a local folder
 - Admin token creation, listing, and revocation
 - Catalog search by title, description, subtitle, or author
 - Reading progress and bookmark synchronization
@@ -37,8 +38,8 @@ Readest / OPDS client
    Next.js route handlers
       /       \
      v         v
-PostgreSQL  Cloudinary
- metadata   EPUB assets
+PostgreSQL  Catbox + Cloudinary
+ metadata   EPUBs    covers
 ```
 
 PostgreSQL and Cloudinary are separate managed services; Vercel hosts the
@@ -50,7 +51,7 @@ provider-agnostic.
 - Node.js 20+
 - npm
 - Managed PostgreSQL database
-- Cloudinary account with raw asset support
+- Cloudinary account (cover images)
 - Vercel account for hosted deployment
 
 ## Local setup
@@ -252,6 +253,19 @@ curl -u "$ADMIN_USERNAME:$ADMIN_PASSWORD" \
 
 The token is returned only when it is created. Store it securely.
 
+## Backing up the library
+
+Copy every book to a folder on your computer; run it again any time and it only
+fetches what is new:
+
+```bash
+npm run library:sync -- ~/Books/minerva --url https://books.example.com
+```
+
+It signs in as `ADMIN_USERNAME` and asks for the admin password (or reads
+`MINERVA_ADMIN_PASSWORD`). Files are named `Title - Author [id].epub`. Books
+deleted from the library are kept in the folder.
+
 ## Deployment
 
 1. Create a managed PostgreSQL database, such as Neon, Supabase, or Vercel Postgres.
@@ -311,8 +325,8 @@ src/
   lib/
     auth.ts                   Authentication and password/token helpers
     catalog.ts                Catalog queries and visibility filtering
-    book-storage.ts           Where EPUB files live (Catbox, older ones Cloudinary)
-    cloudinary.ts             Covers and signed URLs for older EPUBs
+    book-storage.ts           EPUB files on Catbox
+    cloudinary.ts             Cover images
     epub.ts                   EPUB validation and metadata extraction
     opds.ts                   OPDS publication mapping
 ```
@@ -323,7 +337,7 @@ src/
   need a cover added through the admin editor.
 - Uploads pass through the application server. Vercel caps request bodies at
   about 4.5 MB, so larger books need a host without that cap, such as Render.
-- New EPUBs are stored on Catbox (200 MB per file), which has no access control
+- EPUBs are stored on Catbox (200 MB per file), which has no access control
   and no uptime guarantee. Minerva never shows the Catbox link and streams
   downloads itself, so book visibility still applies, but keep your own copies.
 - There is no live PostgreSQL/Cloudinary integration test suite.

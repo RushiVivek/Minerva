@@ -1,15 +1,17 @@
-import { deleteRawBook, rawAssetUrl } from "@/lib/cloudinary";
-
-// Where a book's EPUB lives. New uploads go to Catbox, which takes files up to
-// 200 MB; books uploaded earlier stay on Cloudinary. The two existing columns
-// record it: `cloudinaryResourceType` is "catbox" and `cloudinaryPublicId`
-// holds the file's URL, or they hold Cloudinary's own values.
+// EPUB files live on Catbox, which takes files up to 200 MB. The columns keep
+// their names from when Cloudinary held them: `cloudinaryResourceType` is
+// "catbox" and `cloudinaryPublicId` holds the file's URL.
 
 const CATBOX_API = "https://catbox.moe/user/api.php";
 const CATBOX_FILES = "https://files.catbox.moe/";
-export const CATBOX = "catbox";
+const CATBOX = "catbox";
 
 type StoredBook = { cloudinaryPublicId: string; cloudinaryResourceType: string };
+
+function catboxUrl(book: StoredBook) {
+  if (!book.cloudinaryPublicId.startsWith(CATBOX_FILES)) throw new Error("Book file is not stored on Catbox");
+  return book.cloudinaryPublicId;
+}
 
 async function catbox(fields: Record<string, string | Blob>, filename?: string) {
   const form = new FormData();
@@ -37,13 +39,10 @@ export async function storeBook(buffer: Buffer, checksum: string): Promise<Store
 
 /** A URL the server can fetch the EPUB from. Never hand it to clients: it bypasses book visibility. */
 export function bookFileUrl(book: StoredBook) {
-  return book.cloudinaryResourceType === CATBOX
-    ? book.cloudinaryPublicId
-    : rawAssetUrl(book.cloudinaryPublicId);
+  return catboxUrl(book);
 }
 
 export async function deleteBookFile(book: StoredBook) {
-  if (book.cloudinaryResourceType !== CATBOX) return deleteRawBook(book.cloudinaryPublicId);
   if (!process.env.CATBOX_USERHASH) return;
-  await catbox({ reqtype: "deletefiles", files: book.cloudinaryPublicId.slice(CATBOX_FILES.length) });
+  await catbox({ reqtype: "deletefiles", files: catboxUrl(book).slice(CATBOX_FILES.length) });
 }
