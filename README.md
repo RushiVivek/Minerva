@@ -352,4 +352,7 @@ src/
 
 ## License
 
-No license has been selected yet.
+Minerva is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+It is built for personal use: one owner running their own library. It is not
+designed or tested as a multi-user or public hosting service.
