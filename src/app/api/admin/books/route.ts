@@ -7,7 +7,8 @@ import { getDb } from "@/db/client";
 import { authors, bookAuthors, bookCollections, books, collections } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
 import { EpubError, extractEpubMetadata, validateEpub } from "@/lib/epub";
-import { uploadCoverImage, uploadRawBook } from "@/lib/cloudinary";
+import { storeBook } from "@/lib/book-storage";
+import { uploadCoverImage } from "@/lib/cloudinary";
 
 export async function POST(request: Request) {
   try {
@@ -45,8 +46,7 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    const publicId = `minerva/books/${checksum}`;
-    const uploaded = await uploadRawBook(buffer, publicId);
+    const stored = await storeBook(buffer, checksum);
     const book = await getDb().transaction(async (tx) => {
       const [createdBook] = await tx
         .insert(books)
@@ -55,8 +55,7 @@ export async function POST(request: Request) {
           language: metadata.language,
           identifier: metadata.identifier,
           visibility,
-          cloudinaryPublicId: uploaded.public_id,
-          cloudinaryResourceType: uploaded.resource_type,
+          ...stored,
           mimeType: "application/epub+zip",
           byteSize: file.size,
           checksum,

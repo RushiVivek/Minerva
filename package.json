@@ -4,13 +4,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "auth:hash-password": "node scripts/hash-password.mjs",
     "auth:check": "node scripts/check-admin-password.mjs",
-    "integration:check": "node scripts/integration-check.mjs"
+    "integration:check": "node scripts/integration-check.mjs",
+    "library:sync": "node scripts/sync-library.mjs"
   },
   "dependencies": {
     "@cloudinary/url-gen": "^1.21.0",

@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, notExists } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -6,7 +6,8 @@ import { getDb } from "@/db/client";
 import { authors, bookAuthors, bookCollections, books } from "@/db/schema";
 import { requireAuthentication } from "@/lib/auth";
 import { isUuid } from "@/lib/catalog";
-import { deleteCoverImage, deleteRawBook, uploadCoverImage } from "@/lib/cloudinary";
+import { deleteBookFile } from "@/lib/book-storage";
+import { deleteCoverImage, uploadCoverImage } from "@/lib/cloudinary";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(500),
@@ -136,10 +137,14 @@ export async function DELETE(
       .where(and(eq(books.cloudinaryPublicId, book.cloudinaryPublicId), ne(books.id, id)))
       .limit(1);
     await getDb().delete(books).where(eq(books.id, id));
+    // Authors are only reachable through their books.
+    await getDb()
+      .delete(authors)
+      .where(notExists(getDb().select().from(bookAuthors).where(eq(bookAuthors.authorId, authors.id))));
     // The book is gone from the library either way; a failed cleanup only
     // leaves an unreferenced file behind.
     await Promise.all([
-      sharesFile ? null : deleteRawBook(book.cloudinaryPublicId),
+      sharesFile ? null : deleteBookFile(book),
       book.coverCloudinaryPublicId ? deleteCoverImage(book.coverCloudinaryPublicId) : null,
     ]).catch((error) => console.error("Failed to remove stored files for deleted book", error));
     return NextResponse.json({ ok: true });

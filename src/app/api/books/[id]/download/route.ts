@@ -5,7 +5,7 @@ import { getDb } from "@/db/client";
 import { books } from "@/db/schema";
 import { authenticateRequest } from "@/lib/auth";
 import { isUuid } from "@/lib/catalog";
-import { rawAssetUrl } from "@/lib/cloudinary";
+import { bookFileUrl } from "@/lib/book-storage";
 
 function downloadName(title: string) {
   const safeTitle = title
@@ -39,7 +39,7 @@ export async function GET(
     }
   }
 
-  const asset = await fetch(rawAssetUrl(book.cloudinaryPublicId));
+  const asset = await fetch(bookFileUrl(book));
   if (!asset.ok || !asset.body) {
     return NextResponse.json({ error: "Book asset unavailable" }, { status: 502 });
   }
