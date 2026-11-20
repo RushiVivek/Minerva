@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { listCatalogBooks } from "@/lib/catalog";
+import { publicOrigin } from "@/lib/opds";
 import { requireAuthentication } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
     await requireAuthentication();
-    const url = new URL(request.url);
+    const origin = publicOrigin(request);
     const books = await listCatalogBooks({ includePrivate: true, limit: 500 });
     const entries = books
       .map(
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
           `<entry><id>urn:minerva:book:${book.id}</id>` +
           `<title>${escapeXml(book.title)}</title>` +
           `<author><name>${escapeXml(book.authors.join(", ") || "Unknown")}</name></author>` +
-          `<link rel="http://opds-spec.org/acquisition" href="${url.origin}/api/books/${book.id}/download" type="application/epub+zip"/></entry>`,
+          `<link rel="http://opds-spec.org/acquisition" href="${origin}/api/books/${book.id}/download" type="application/epub+zip"/></entry>`,
       )
       .join("");
     return new NextResponse(

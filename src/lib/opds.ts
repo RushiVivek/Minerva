@@ -74,6 +74,19 @@ export function toOpdsFeed(
   };
 }
 
+/**
+ * The origin clients used to reach us. Behind a proxy such as Render's,
+ * `request.url` names the internal server (e.g. https://localhost:10000), so
+ * catalog links are built from the forwarded host and protocol instead.
+ */
+export function publicOrigin(request: Request) {
+  const url = new URL(request.url);
+  const first = (name: string) => request.headers.get(name)?.split(",")[0].trim();
+  const host = first("x-forwarded-host") || first("host") || url.host;
+  const protocol = first("x-forwarded-proto") || url.protocol.replace(/:$/, "");
+  return `${protocol}://${host}`;
+}
+
 export function opdsRequestParams(url: URL) {
   const offset = Number(url.searchParams.get("offset"));
   return {

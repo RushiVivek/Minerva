@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuthentication } from "@/lib/auth";
 import { browseCatalog } from "@/lib/catalog";
-import { opdsRequestParams, toOpdsFeed } from "@/lib/opds";
+import { opdsRequestParams, publicOrigin, toOpdsFeed } from "@/lib/opds";
 
 export async function GET(
   request: Request,
@@ -18,7 +18,7 @@ export async function GET(
     if (!view) return NextResponse.json({ error: "Collection not found" }, { status: 404 });
     return NextResponse.json(
       toOpdsFeed(view, {
-        baseUrl: url.origin,
+        baseUrl: publicOrigin(request),
         catalogPath: "/api/opds/private/2.0/catalog",
         title: "Minerva Private Library",
         ...params,
