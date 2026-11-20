@@ -11,11 +11,13 @@ import { storeBook } from "@/lib/book-storage";
 import { uploadCoverImage } from "@/lib/cloudinary";
 
 export async function POST(request: Request) {
+  let isAdmin = false;
   try {
     const principal = await requireAuthentication();
     if (principal.kind !== "admin") {
       return NextResponse.json({ error: "Admin authentication required" }, { status: 403 });
     }
+    isAdmin = true;
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -104,8 +106,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("Failed to upload book", error);
-    // Only an authenticated admin gets this far, so the cause is safe to show.
-    return NextResponse.json({ error: `Upload failed: ${describeError(error)}` }, { status: 500 });
+    // The cause helps the admin fix a failed upload; anyone else gets no detail.
+    const message = isAdmin ? `Upload failed: ${describeError(error)}` : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
