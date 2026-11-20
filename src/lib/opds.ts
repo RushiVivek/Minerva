@@ -65,10 +65,12 @@ export function toOpdsFeed(
         ? [{ rel: "next", href: pageUrl(offset + view.books.length), type: "application/opds+json" }]
         : []),
     ],
+    // OPDS 2.0 navigation entries are plain Link Objects; clients read `href` directly.
     navigation: view.folders.map((folder) => ({
+      rel: "subsection",
+      href: folderUrl(folder.slug),
+      type: "application/opds+json",
       title: folder.name,
-      subtitle: folder.description ?? undefined,
-      links: [{ rel: "subsection", href: folderUrl(folder.slug), type: "application/opds+json" }],
     })),
     publications: view.books.map((book) => toOpdsPublication(book, baseUrl)),
   };

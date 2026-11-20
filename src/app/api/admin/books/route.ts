@@ -104,6 +104,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("Failed to upload book", error);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    // Only an authenticated admin gets this far, so the cause is safe to show.
+    return NextResponse.json({ error: `Upload failed: ${describeError(error)}` }, { status: 500 });
   }
+}
+
+/** `fetch` failures say only "fetch failed"; the network reason is in `cause`. */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  return error.cause ? `${error.message} (${describeError(error.cause)})` : error.message;
 }
