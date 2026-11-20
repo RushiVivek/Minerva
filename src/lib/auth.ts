@@ -52,7 +52,9 @@ export function hashPassword(password: string) {
 }
 
 export function verifyPassword(password: string, encoded: string) {
-  const [algorithm, salt, expectedHex] = encoded.split("$");
+  // `.env` files need each `$` escaped as `\$`, but a host's real environment
+  // variables are passed through verbatim; accept the hash written either way.
+  const [algorithm, salt, expectedHex] = encoded.trim().replaceAll("\\$", "$").split("$");
   if (algorithm !== "scrypt" || !salt || !expectedHex) return false;
   const actual = scryptSync(password, salt, 64);
   const expected = Buffer.from(expectedHex, "hex");
@@ -79,7 +81,7 @@ async function checkCredentials(authorization: string) {
       username &&
       passwordHash &&
       basic.username === username &&
-      verifyPassword(basic.password, passwordHash.trim())
+      verifyPassword(basic.password, passwordHash)
     ) {
       return { kind: "admin" as const, tokenId: null };
     }

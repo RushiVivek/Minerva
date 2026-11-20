@@ -17,7 +17,7 @@ services:
         sync: false
       - key: ADMIN_USERNAME
         sync: false
-      # Escape each `$` as `\$`, exactly as in .env.local.
+      # Paste the hash as generated; unlike .env files, no `\$` escaping is needed.
       - key: ADMIN_PASSWORD_HASH
         sync: false
       - key: CATBOX_USERHASH

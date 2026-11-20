@@ -5,7 +5,7 @@ const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
 
 const password = process.argv[2];
-const encoded = process.env.ADMIN_PASSWORD_HASH?.trim();
+const encoded = process.env.ADMIN_PASSWORD_HASH?.trim().replaceAll("\\$", "$");
 if (!password || !encoded) {
   console.error("Usage: npm run auth:check -- '<admin-password>'");
   process.exit(1);

@@ -7,6 +7,7 @@ describe("authentication primitives", () => {
     const encoded = hashPassword("correct horse battery staple");
     expect(verifyPassword("correct horse battery staple", encoded)).toBe(true);
     expect(verifyPassword("wrong password", encoded)).toBe(false);
+    expect(verifyPassword("correct horse battery staple", encoded.replaceAll("$", "\\$"))).toBe(true);
   });
 
   it("verifies bearer tokens against their hash", () => {

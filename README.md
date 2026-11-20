@@ -274,9 +274,9 @@ Minerva deploys to [Render](https://render.com) from `render.yaml`:
 2. Create a Cloudinary account and collect its cloud name, API key, and API secret.
 3. Push this repository to GitHub or GitLab.
 4. In Render, choose **New > Blueprint** and select the repository.
-5. Fill in the values Render asks for; they match `.env.example`. Keep the `\$`
-   escaping in `ADMIN_PASSWORD_HASH`, because Next.js expands unescaped `$`
-   even in real environment variables. `CATBOX_USERHASH` may be left empty.
+5. Fill in the values Render asks for; they match `.env.example`. Paste
+   `ADMIN_PASSWORD_HASH` with or without the `\$` escaping that `.env` files
+   need; both work. `CATBOX_USERHASH` may be left empty.
 6. Deploy. Each build runs `npm run db:migrate` before `npm run build`, so new
    migrations are applied automatically.
 7. Add a custom domain in the service settings if desired.
