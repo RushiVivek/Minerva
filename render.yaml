@@ -1,0 +1,30 @@
+# Render Blueprint: New > Blueprint, pick this repository.
+# Render asks for each `sync: false` value when the Blueprint is first created.
+services:
+  - type: web
+    name: minerva
+    runtime: node
+    plan: free
+    region: singapore
+    # Migrations run during the build because the free plan has no pre-deploy step.
+    buildCommand: npm ci && npm run db:migrate && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      # Escape each `$` as `\$`, exactly as in .env.local.
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: CATBOX_USERHASH
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

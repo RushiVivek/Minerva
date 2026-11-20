@@ -2,7 +2,7 @@
 
 Minerva is a self-hosted EPUB library server that publishes books through
 [OPDS](https://opds-spec.org/) for Readest and other compatible reading apps.
-It is designed for deployment on Vercel, with PostgreSQL for catalog metadata,
+It is designed for deployment on Render, with PostgreSQL for catalog metadata,
 Catbox for EPUB files and Cloudinary for cover images.
 
 ## Features
@@ -19,7 +19,7 @@ Catbox for EPUB files and Cloudinary for cover images.
 - Reading progress and bookmark synchronization
 - Readest-compatible KOReader Sync/KOSync progress API
 - OPDS collections exposed as navigable sub-catalogues
-- Vercel-ready deployment configuration
+- One-click Render deployment (`render.yaml`) with a health endpoint
 - Kavita-inspired library browsing and administration UI
 - Built-in web reader: table of contents, progress bar, themes, font and
   spacing controls, paged or scrolling layout, keyboard/tap/swipe navigation.
@@ -34,7 +34,7 @@ Catbox for EPUB files and Cloudinary for cover images.
 Readest / OPDS client
           |
           v
-       Vercel
+       Render
    Next.js route handlers
       /       \
      v         v
@@ -42,7 +42,7 @@ PostgreSQL  Catbox + Cloudinary
  metadata   EPUBs    covers
 ```
 
-PostgreSQL and Cloudinary are separate managed services; Vercel hosts the
+PostgreSQL and Cloudinary are separate managed services; Render hosts the
 application only. The database layer uses Drizzle ORM and is intentionally
 provider-agnostic.
 
@@ -52,7 +52,7 @@ provider-agnostic.
 - npm
 - Managed PostgreSQL database
 - Cloudinary account (cover images)
-- Vercel account for hosted deployment
+- Render account for hosted deployment
 
 ## Local setup
 
@@ -109,7 +109,7 @@ npm run integration:check
 This runs `SELECT 1` against PostgreSQL and Cloudinary's API ping. It loads
 `.env`, then `.env.local` with `.env.local` taking precedence.
 
-After changing `.env.local`, restart `npm run dev` or redeploy Vercel. The
+After changing `.env.local`, restart `npm run dev` or redeploy on Render. The
 running server does not reload environment variables for an already-started
 process.
 
@@ -268,25 +268,28 @@ deleted from the library are kept in the folder.
 
 ## Deployment
 
-1. Create a managed PostgreSQL database, such as Neon, Supabase, or Vercel Postgres.
+Minerva deploys to [Render](https://render.com) from `render.yaml`:
+
+1. Create a managed PostgreSQL database, such as Neon or Supabase.
 2. Create a Cloudinary account and collect its cloud name, API key, and API secret.
-3. Create a Vercel project connected to this repository.
-4. Add all `.env.example` values to the Vercel project environment.
-5. Configure the custom domain in Vercel if desired.
-6. Run the migration against the production database:
+3. Push this repository to GitHub or GitLab.
+4. In Render, choose **New > Blueprint** and select the repository.
+5. Fill in the values Render asks for; they match `.env.example`. Keep the `\$`
+   escaping in `ADMIN_PASSWORD_HASH`, because Next.js expands unescaped `$`
+   even in real environment variables. `CATBOX_USERHASH` may be left empty.
+6. Deploy. Each build runs `npm run db:migrate` before `npm run build`, so new
+   migrations are applied automatically.
+7. Add a custom domain in the service settings if desired.
+8. Use the deployment URL in Readest. Catalog links are generated from the
+   request host, so no app URL setting is needed.
 
-   ```bash
-   DATABASE_URL='...' npm run db:migrate
-   ```
-
-7. Deploy to Vercel.
-
-To host on Render instead, create a Web Service from this repository with
-build command `npm install && npm run build` and start command `npm start`,
-add the same environment variables, and run the migration as above.
-8. Use the appropriate deployment URL in Readest. Multiple production deployments
-   can run independently; each deployment generates catalog links from the request
-   host, so no single global app URL is required.
+The Blueprint uses Render's free plan in the Singapore region; change `plan`
+and `region` in `render.yaml` to suit. A free service sleeps after about 15
+minutes without traffic and takes up to a minute to wake. To keep it awake,
+have an uptime monitor (UptimeRobot, cron-job.org, or similar) request
+`GET /api/health` every 10 minutes. The endpoint returns `{"status":"ok"}`
+and does not touch the database, so it will not keep a scale-to-zero
+database running.
 
 OPDS clients should use the deployed HTTPS endpoint. Do not expose the admin
 page or private catalog over an unsecured connection.
@@ -317,6 +320,7 @@ src/
     admin/                    Admin upload page
     api/admin/                Upload and token administration
     api/books/                Protected book downloads
+    api/health/               Liveness check for Render and uptime pingers
     api/opds/                 Public and private OPDS feeds
     api/progress/             Reading progress and bookmark sync
   db/
@@ -335,8 +339,8 @@ src/
 
 - Covers are extracted when a book is uploaded; books uploaded before that
   need a cover added through the admin editor.
-- Uploads pass through the application server. Vercel caps request bodies at
-  about 4.5 MB, so larger books need a host without that cap, such as Render.
+- Uploads pass through the application server, which buffers the whole file;
+  the free Render plan's 512 MB of memory is the practical ceiling.
 - EPUBs are stored on Catbox (200 MB per file), which has no access control
   and no uptime guarantee. Minerva never shows the Catbox link and streams
   downloads itself, so book visibility still applies, but keep your own copies.
